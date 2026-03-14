@@ -1,0 +1,240 @@
+from skills.discover import discover_schemes
+from skills.eligibility import check_eligibility
+from skills.documents import get_document_guide
+from typing import Dict, Any
+
+
+# List of greeting words to detect
+GREETINGS = ["hi", "hello", "hey", "నమస్కారం", "start", "help"]
+
+
+def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any]]) -> str:
+    """
+    Handle user message and manage conversation state.
+    
+    Args:
+        user_id: Unique identifier for the user
+        message: User's message
+        sessions: Dict storing session data keyed by user_id
+    
+    Returns:
+        Telugu response string
+    """
+    
+    # Normalize message
+    message = message.strip()
+    
+    # Initialize session if not exists
+    if user_id not in sessions:
+        sessions[user_id] = {
+            "state": "start",
+            "data": {
+                "business_type": None,
+                "matched_schemes": [],
+                "current_scheme_id": None,
+                "eligibility_step": 0,
+                "user_profile": {}
+            }
+        }
+    
+    session = sessions[user_id]
+    state = session["state"]
+    data = session["data"]
+    
+    # Check for documents request (can happen at any time)
+    if message.lower() in ["documents", "డాక్యుమెంట్స్", "docs"]:
+        if data["current_scheme_id"]:
+            result = get_document_guide(data["current_scheme_id"])
+            return result
+        else:
+            return "మీరు మొదట ఏ పథకం ఎంచుకోవాలి."
+    
+    # START state - handle greetings
+    if state == "start":
+        if message.lower() in GREETINGS or not message:
+            session["state"] = "awaiting_business_type"
+            return "నమస్కారం! 🙏 మీ వ్యాపార రకం చెప్పండి (ఉదా: kirana, tailor, salon)"
+        else:
+            # If not a greeting, treat as business type
+            session["state"] = "awaiting_business_type"
+            return handle_message(user_id, message, sessions)
+    
+    # AWAITING_BUSINESS_TYPE state - ask for business type
+    elif state == "awaiting_business_type":
+        
+        # Call discover_schemes
+        business_type = message
+        schemes_result = discover_schemes(business_type)
+        
+        # Check if schemes were found
+        if "కనుగొనబడలేదు" in schemes_result:
+            return schemes_result
+        
+        # Parse the schemes from the result and extract scheme IDs
+        # We need to also save the schemes internally
+        data["business_type"] = business_type
+        
+        # Store the display string and ask user to choose
+        session["state"] = "discovered"
+        data["schemes_display"] = schemes_result
+        
+        # Extract scheme IDs from data to know which schemes matched
+        # Re-run discover to get actual scheme objects (we need IDs)
+        import json
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        schemes_file = os.path.join(current_dir, "data", "schemes.json")
+        
+        try:
+            with open(schemes_file, "r", encoding="utf-8") as f:
+                all_schemes = json.load(f)
+        except:
+            all_schemes = []
+        
+        # Get keyword variants for matching
+        from skills.discover import keyword_map
+        business_type_lower = business_type.lower()
+        variants = keyword_map.get(business_type_lower, [business_type_lower])
+        
+        matched_schemes = []
+        for scheme in all_schemes:
+            target_types = [bt.lower() for bt in scheme.get("target_business_types", [])]
+            business_match = False
+            for variant in variants:
+                for target in target_types:
+                    if variant in target or target in variant:
+                        business_match = True
+                        break
+                if business_match:
+                    break
+            
+            if business_match:
+                matched_schemes.append(scheme)
+        
+        data["matched_schemes"] = matched_schemes
+        
+        return schemes_result
+    
+    # DISCOVERED state - user selects a scheme
+    elif state == "discovered":
+        try:
+            choice = int(message) - 1
+            if 0 <= choice < len(data["matched_schemes"]):
+                scheme = data["matched_schemes"][choice]
+                data["current_scheme_id"] = scheme.get("id")
+                session["state"] = "eligibility"
+                data["eligibility_step"] = 0
+                data["user_profile"] = {}
+                return "మీ వ్యక్తిగత వివరాలు అడుగుతూ ఉన్నాను...\n\n(1) మీ లింగం చెప్పండి (male/female/other):"
+            else:
+                return "చెల్లని సంఖ్య. దయచేసి చెల్లుబాటుయ్యే సంఖ్య టైప్ చేయండి."
+        except ValueError:
+            return "చెల్లని ఇన్పుట్. దయచేసి సంఖ్య టైప్ చేయండి."
+    
+    # ELIGIBILITY state - gather user profile info
+    elif state == "eligibility":
+        step = data["eligibility_step"]
+        
+        # Step 0: Gender
+        if step == 0:
+            gender_input = message.lower()
+            if gender_input in ["male", "female", "other", "చేసిన", "కూతురు", "ఇతర"]:
+                if gender_input in ["male", "చేసిన"]:
+                    data["user_profile"]["gender"] = "male"
+                elif gender_input in ["female", "కూతురు"]:
+                    data["user_profile"]["gender"] = "female"
+                else:
+                    data["user_profile"]["gender"] = gender_input
+                
+                data["eligibility_step"] = 1
+                return "(2) మీ కులం చెప్పండి (general/sc/st/obc):"
+            else:
+                return "చెల్లని ఇన్పుట్. దయచేసి male, female, లేదా other చెప్పండి."
+        
+        # Step 1: Caste
+        elif step == 1:
+            caste_input = message.lower()
+            if caste_input in ["general", "sc", "st", "obc"]:
+                data["user_profile"]["caste"] = caste_input
+                data["eligibility_step"] = 2
+                return "(3) మీ వయసు చెప్పండి (సంఖ్యలో):"
+            else:
+                return "చెల్లని ఇన్పుట్. దయచేసి general, sc, st, లేదా obc చెప్పండి."
+        
+        # Step 2: Age
+        elif step == 2:
+            try:
+                age = int(message)
+                if age > 0 and age < 150:
+                    data["user_profile"]["age"] = age
+                    data["eligibility_step"] = 3
+                    return "(4) మీకు GST registration ఉందా? (yes/no):"
+                else:
+                    return "చెల్లని వయస్సు. దయచేసి 1 నుండి 149 మధ్య సంఖ్య చెప్పండి."
+            except ValueError:
+                return "చెల్లని ఇన్పుట్. దయచేసి మీ వయస్సు సంఖ్యలో చెప్పండి."
+        
+        # Step 3: GST
+        elif step == 3:
+            gst_input = message.lower()
+            if gst_input in ["yes", "no", "అవన్న", "లేదు"]:
+                has_gst = gst_input in ["yes", "అవన్న"]
+                data["user_profile"]["has_gst"] = has_gst
+                data["eligibility_step"] = 4
+                return "(5) మీకు bank account ఉందా? (yes/no):"
+            else:
+                return "చెల్లని ఇన్పుట్. దయచేసి yes లేదా no చెప్పండి."
+        
+        # Step 4: Bank Account
+        elif step == 4:
+            bank_input = message.lower()
+            if bank_input in ["yes", "no", "అవన్న", "లేదు"]:
+                has_bank = bank_input in ["yes", "అవన్న"]
+                data["user_profile"]["has_bank_account"] = has_bank
+                
+                # Now call check_eligibility
+                session["state"] = "eligibility_result"
+                result = check_eligibility(data["current_scheme_id"], data["user_profile"])
+                
+                return (
+                    result + 
+                    "\n\n📋 డాక్యుమెంట్‌ల కోసం, 'documents' టైప్ చేయండి.\n" +
+                    "🔄 మరొక పథకం కోసం, 'restart' టైప్ చేయండి."
+                )
+            else:
+                return "చెల్లని ఇన్పుట్. దయచేసి yes లేదా no చెప్పండి."
+    
+    # ELIGIBILITY_RESULT state - show result and options
+    elif state == "eligibility_result":
+        if message.lower() in ["restart", "మళ్లీ", "మరు"]:
+            session["state"] = "awaiting_business_type"
+            data["business_type"] = None
+            data["matched_schemes"] = []
+            data["current_scheme_id"] = None
+            data["eligibility_step"] = 0
+            data["user_profile"] = {}
+            return "నమస్కారం! 🙏 మీ వ్యాపార రకం చెప్పండి (ఉదా: kirana, tailor, salon)"
+        elif message.lower() in ["documents", "డాక్యుమెంట్స్", "docs"]:
+            result = get_document_guide(data["current_scheme_id"])
+            return result
+        else:
+            return "బాధ్యతలు రండి! 'documents' లేదా 'restart' చెప్పండి."
+    
+    # Default
+    return "నమస్కారం! దయచేసి తిరిగి ప్రయత్నించండి."
+
+
+if __name__ == "__main__":
+    sessions = {}
+    user_id = "test_user"
+    print("scheme-saathi bot (type 'exit' to quit)")
+    print("స్కీమ్-సాథి బాట్ (నిష్క్రమించడానికి 'exit' చెప్పండి)\n")
+    
+    while True:
+        msg = input("You: ").strip()
+        if msg == "exit":
+            print("धन्यवाद! さようなら! Goodbye!")
+            break
+        
+        response = handle_message(user_id, msg, sessions)
+        print(f"Bot: {response}\n")
