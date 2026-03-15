@@ -12,7 +12,10 @@ keyword_map = {
     "pharmacy": ["pharmacy", "medical", "drug"],
     "laundry": ["laundry", "service providers"],
     "carpenter": ["carpenter", "carpenters", "wood"],
-    "street vendor": ["street vendor", "hawker", "mobile carts", "street vendors"]
+    "street vendor": ["street vendor", "hawker", "mobile carts", "street vendors"],
+    "auto": ["auto", "auto-rickshaw", "rickshaw", "taxi", "transport"],
+    "taxi": ["taxi", "cab", "auto-rickshaw", "transport services"],
+    "driver": ["driver", "auto-rickshaw drivers", "taxi drivers", "transport"]
 }
 
 

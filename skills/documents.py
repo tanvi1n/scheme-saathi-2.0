@@ -17,7 +17,10 @@ doc_locations = {
     "Passport Photos": "దగ్గర photo studio లో తీయవచ్చు",
     "Project Report": "DIC office సహాయం తీసుకోండి (free)",
     "Income Certificate": "MeeSeva లో తీయవచ్చు",
-    "Educational Certificates": "మీ school/college certificates"
+    "Educational Certificates": "మీ school/college certificates",
+    "Driving License": "RTO office లో తీయవచ్చు లేదా renew చేయవచ్చు",
+    "Bank Account Statement": "మీ bank నుండి print చేయవచ్చు",
+    "Vehicle Quotation": "Auto/Vehicle dealer నుండి quotation తీసుకోండి"
 }
 
 
