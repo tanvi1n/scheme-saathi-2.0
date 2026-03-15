@@ -41,7 +41,8 @@
       "Traditional Crafts",
       "Skill Development",
       "Low Interest"
-    ]
+    ],
+    "telugu_description": "సాంప్రదాయ కళాకారులు మరియు హస్తకళాకారులకు నైపుణ్య శిక్షణ, సాధన మంజూరు మరియు రుణ సహాయం."
   },
   {
     "id": "mudra_shishu",
@@ -82,7 +83,8 @@
       "Microfinance",
       "Startup",
       "No Collateral"
-    ]
+    ],
+    "telugu_description": "చిన్న వ్యాపారాలు మరియు స్టార్టప్‌లకు ఆర్థిక సహాయం."
   },
   {
     "id": "mudra_kishor",
@@ -121,7 +123,8 @@
     "tags": [
       "Business Expansion",
       "Working Capital"
-    ]
+    ],
+    "telugu_description": "స్థాపించబడిన చిన్న వ్యాపారాలు విస్తరించడానికి లేదా పరికరాలు కొనుగోలు చేయడానికి రుణం."
   },
   {
     "id": "pmegp",
@@ -161,7 +164,8 @@
       "Manufacturing",
       "New Enterprise",
       "Government Subsidy"
-    ]
+    ],
+    "telugu_description": "తయారీ మరియు సేవలలో కొత్త సూక్ష్మ సంస్థలను స్థాపించడానికి రుణ-అనుసంధాన సబ్సిడీ పథకం."
   },
   {
     "id": "pm_svanidhi",
@@ -200,7 +204,8 @@
       "Street Vendor",
       "Urban",
       "Small Loan"
-    ]
+    ],
+    "telugu_description": "వీధి వ్యాపారులకు జీవనోపాధిని పునఃప్రారంభించడానికి తాకట్టు రహిత వర్కింగ్ క్యాపిటల్ రుణాలు."
   },
   {
     "id": "stand_up_india",
@@ -241,7 +246,8 @@
       "Women Entrepreneurs",
       "SC/ST",
       "Large Capital"
-    ]
+    ],
+    "telugu_description": "SC/ST మరియు మహిళా వ్యవసాయదారులకు కొత్త సంస్థలను స్థాపించడానికి రుణాలు."
   },
   {
     "id": "t_idea",
@@ -280,7 +286,8 @@
       "State Subsidy",
       "Manufacturing",
       "Power Reimbursement"
-    ]
+    ],
+    "telugu_description": "తెలంగాణలో MSMEలకు పెట్టుబడి సబ్సిడీలు మరియు విద్యుత్ ఖర్చు రీయింబర్స్‌మెంట్‌లు అందించే ప్రోత్సాహక పథకం."
   },
   {
     "id": "t_pride",
@@ -320,7 +327,8 @@
       "SC/ST Incentives",
       "High Subsidy",
       "Telangana State"
-    ]
+    ],
+    "telugu_description": "SC/ST మరియు వికలాంగ వ్యవసాయదారులకు అధిక మూలధన సబ్సిడీలతో సహా లక్ష్య ప్రోత్సాహకాలు."
   },
   {
     "id": "we_hub",
@@ -359,7 +367,8 @@
       "Women Empowerment",
       "Incubation",
       "Mentorship"
-    ]
+    ],
+    "telugu_description": "మహిళల నేతృత్వంలోని స్టార్టప్‌లు మరియు సూక్ష్మ సంస్థలకు ఇంక్యుబేషన్ మరియు ఆర్థిక అనుసంధాన మద్దతు."
   },
   {
     "id": "dalit_bandhu",
@@ -401,7 +410,8 @@
       "SC Grant",
       "Full Funding",
       "Telangana Govt"
-    ]
+    ],
+    "telugu_description": "SC కుటుంబాలకు వ్యాపారం ప్రారంభించడానికి బ్యాంకు అనుసంధానం లేదా తిరిగి చెల్లింపు లేకుండా ప్రత్యక్ష ఆర్థిక సహాయం."
   },
   {
     "id": "rajiv_yuva_vikasam",
@@ -441,7 +451,8 @@
       "Youth Employment",
       "Backward Classes",
       "Subsidized Loan"
-    ]
+    ],
+    "telugu_description": "వెనుకబడిన మరియు మైనారిటీ సంఘాల నుండి నిరుద్యోగ యువతకు స్వయం ఉపాధి పథకం."
   },
   {
     "id": "cgtmse",
@@ -481,7 +492,8 @@
       "No Collateral",
       "Large Loan",
       "Central Government"
-    ]
+    ],
+    "telugu_description": "MSMEలకు గ్యారెంటీ ట్రస్ట్ ద్వారా అందించబడే తాకట్టు రహిత రుణ సౌకర్యం."
   },
   {
     "id": "pm_swarozgar_transport",
@@ -525,14 +537,18 @@
       "Self-employment",
       "Vehicle Loan",
       "Subsidy"
-    ]
+    ],
+    "telugu_description": "స్వయం ఉపాధి కోసం ఆటో-రిక్షాలు, టాక్సీలు మరియు ఇతర వాణిజ్య వాహనాలను కొనుగోలు చేయడానికి ఆర్థిక సహాయం."
   },
   {
     "id": "mahalakshmi_scheme",
     "name": "Mahalakshmi Scheme",
     "telugu_name": "మహాలక్ష్మి పథకం",
     "description": "Financial assistance of ₹2,500 monthly and free travel in TSRTC buses for women.",
-    "target_individual_types": ["Women", "Heads of Household"],
+    "target_individual_types": [
+      "Women",
+      "Heads of Household"
+    ],
     "eligibility_criteria": {
       "gender": "female",
       "caste": "any",
@@ -546,20 +562,33 @@
     "amount_min": 2500,
     "amount_max": 30000,
     "unit": "INR per year/month",
-    "documents_required": ["Aadhaar Card", "White Ration Card", "Bank Passbook"],
+    "documents_required": [
+      "Aadhaar Card",
+      "White Ration Card",
+      "Bank Passbook"
+    ],
     "apply_url": "https://prajapalana.telangana.gov.in",
     "apply_offline": "Grama Sabhas / Praja Palana Centers",
     "helpline": "1100",
     "processing_time_days": 45,
     "success_rate": "high",
-    "tags": ["Women Welfare", "Monthly Income", "Free Travel"]
+    "tags": [
+      "Women Welfare",
+      "Monthly Income",
+      "Free Travel"
+    ],
+    "telugu_description": "మహిళలకు నెలవారీ ₹2,500 ఆర్థిక సహాయం మరియు TSRTC బస్సుల్లో ఉచిత ప్రయాణం."
   },
   {
     "id": "rythu_bharosa",
     "name": "Rythu Bharosa",
     "telugu_name": "రైతు భరోసా",
     "description": "Investment support for farmers and financial aid for tenant farmers and laborers.",
-    "target_individual_types": ["Farmers", "Agricultural Laborers", "Tenant Farmers"],
+    "target_individual_types": [
+      "Farmers",
+      "Agricultural Laborers",
+      "Tenant Farmers"
+    ],
     "eligibility_criteria": {
       "gender": "any",
       "caste": "any",
@@ -573,20 +602,32 @@
     "amount_min": 12000,
     "amount_max": 15000,
     "unit": "INR per acre/year",
-    "documents_required": ["Pattadar Passbook", "Aadhaar Card", "Bank Account Details"],
+    "documents_required": [
+      "Pattadar Passbook",
+      "Aadhaar Card",
+      "Bank Account Details"
+    ],
     "apply_url": "https://rythubandhu.telangana.gov.in",
     "apply_offline": "Mandal Agriculture Office",
     "helpline": "040-23383520",
     "processing_time_days": 60,
     "success_rate": "high",
-    "tags": ["Agriculture", "Farmer Support", "Annual Grant"]
+    "tags": [
+      "Agriculture",
+      "Farmer Support",
+      "Annual Grant"
+    ],
+    "telugu_description": "రైతులకు పెట్టుబడి మద్దతు మరియు కౌలు రైతులు మరియు కూలీలకు ఆర్థిక సహాయం."
   },
   {
     "id": "gruha_jyothi",
     "name": "Gruha Jyothi",
     "telugu_name": "గృహ జ్యోతి",
     "description": "Provision of free domestic electricity up to 200 units per month for households.",
-    "target_individual_types": ["BPL Families", "Domestic Consumers"],
+    "target_individual_types": [
+      "BPL Families",
+      "Domestic Consumers"
+    ],
     "eligibility_criteria": {
       "gender": "any",
       "caste": "any",
@@ -600,20 +641,32 @@
     "amount_min": 0,
     "amount_max": 200,
     "unit": "Units per month",
-    "documents_required": ["Electricity Bill", "Aadhaar Card", "White Ration Card"],
+    "documents_required": [
+      "Electricity Bill",
+      "Aadhaar Card",
+      "White Ration Card"
+    ],
     "apply_url": "https://prajapalana.telangana.gov.in",
     "apply_offline": "Electricity Department Office / Praja Palana Center",
     "helpline": "1912",
     "processing_time_days": 30,
     "success_rate": "high",
-    "tags": ["Free Power", "Household", "Subsidy"]
+    "tags": [
+      "Free Power",
+      "Household",
+      "Subsidy"
+    ],
+    "telugu_description": "గృహాలకు నెలకు 200 యూనిట్ల వరకు ఉచిత విద్యుత్ సరఫరా."
   },
   {
     "id": "indiramma_indlu",
     "name": "Indiramma Indlu",
     "telugu_name": "ఇందిరమ్మ ఇండ్లు",
     "description": "Financial aid of ₹5 lakh for constructing houses on own plots for the homeless.",
-    "target_individual_types": ["Homeless Families", "Plot Owners"],
+    "target_individual_types": [
+      "Homeless Families",
+      "Plot Owners"
+    ],
     "eligibility_criteria": {
       "gender": "any",
       "caste": "any",
@@ -627,20 +680,33 @@
     "amount_min": 500000,
     "amount_max": 500000,
     "unit": "INR",
-    "documents_required": ["Land Documents", "Aadhaar Card", "White Ration Card", "Income Certificate"],
+    "documents_required": [
+      "Land Documents",
+      "Aadhaar Card",
+      "White Ration Card",
+      "Income Certificate"
+    ],
     "apply_url": "https://housing.telangana.gov.in",
     "apply_offline": "District Housing Office / Collectorate",
     "helpline": "040-23225018",
     "processing_time_days": 120,
     "success_rate": "medium",
-    "tags": ["Housing", "Construction", "Financial Aid"]
+    "tags": [
+      "Housing",
+      "Construction",
+      "Financial Aid"
+    ],
+    "telugu_description": "నిరాశ్రయులైన కుటుంబాలకు స్వంత స్థలాల్లో ఇళ్లు నిర్మించడానికి ₹5 లక్షల ఆర్థిక సహాయం."
   },
   {
     "id": "rajiv_aarogyasri",
     "name": "Rajiv Aarogyasri (Cheyutha)",
     "telugu_name": "రాజీవ్ ఆరోగ్యశ్రీ",
     "description": "Health insurance coverage up to ₹10 lakh per family for major ailments.",
-    "target_individual_types": ["BPL Families", "Patients"],
+    "target_individual_types": [
+      "BPL Families",
+      "Patients"
+    ],
     "eligibility_criteria": {
       "gender": "any",
       "caste": "any",
@@ -654,20 +720,32 @@
     "amount_min": 0,
     "amount_max": 1000000,
     "unit": "INR coverage",
-    "documents_required": ["White Ration Card", "Aadhaar Card", "Medical Reports"],
+    "documents_required": [
+      "White Ration Card",
+      "Aadhaar Card",
+      "Medical Reports"
+    ],
     "apply_url": "https://www.aarogyasri.telangana.gov.in",
     "apply_offline": "Aarogyasri Help Desk at Empanelled Hospitals",
     "helpline": "104",
     "processing_time_days": 1,
     "success_rate": "high",
-    "tags": ["Healthcare", "Insurance", "Emergency"]
+    "tags": [
+      "Healthcare",
+      "Insurance",
+      "Emergency"
+    ],
+    "telugu_description": "ప్రధాన వ్యాధులకు కుటుంబానికి ₹10 లక్షల వరకు ఆరోగ్య బీమా కవరేజీ."
   },
   {
     "id": "kalyana_lakshmi",
     "name": "Kalyana Lakshmi / Shaadi Mubarak",
     "telugu_name": "కళ్యాణ లక్ష్మి / షాదీ ముబారక్",
     "description": "Financial assistance for the marriage of girls from BPL families.",
-    "target_individual_types": ["BPL Families", "Unmarried Girls"],
+    "target_individual_types": [
+      "BPL Families",
+      "Unmarried Girls"
+    ],
     "eligibility_criteria": {
       "gender": "female",
       "caste": "sc/st/bc/minority/ebc",
@@ -681,12 +759,23 @@
     "amount_min": 100116,
     "amount_max": 100116,
     "unit": "INR",
-    "documents_required": ["Marriage Certificate", "Wedding Card", "Aadhaar Card", "Income Certificate", "Bank Passbook"],
+    "documents_required": [
+      "Marriage Certificate",
+      "Wedding Card",
+      "Aadhaar Card",
+      "Income Certificate",
+      "Bank Passbook"
+    ],
     "apply_url": "https://telanganaepass.cgg.gov.in",
     "apply_offline": "MRO / Tehsildar Office",
     "helpline": "040-23120311",
     "processing_time_days": 60,
     "success_rate": "high",
-    "tags": ["Marriage Aid", "Social Welfare", "Women Support"]
+    "tags": [
+      "Marriage Aid",
+      "Social Welfare",
+      "Women Support"
+    ],
+    "telugu_description": "BPL కుటుంబాల నుండి అమ్మాయిల వివాహానికి ఆర్థిక సహాయం."
   }
 ]
