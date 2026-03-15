@@ -53,7 +53,13 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     if state == "start":
         if message.lower() in GREETINGS or not message:
             session["state"] = "awaiting_business_type"
-            return "నమస్కారం! 🙏 మీ వ్యాపార రకం చెప్పండి (ఉదా: kirana, tailor, salon)"
+            return ("నమస్కారం! 🙏 మీ వ్యాపార రకం ఎంచుకోండి:\n\n"
+                    "1. Kirana/Grocery (కిరాణా)\n"
+                    "2. Tailor (టైలర్)\n"
+                    "3. Salon/Beauty (సెలూన్)\n"
+                    "4. Vegetable Vendor (కూరగాయల వ్యాపారి)\n"
+                    "5. Auto (ఆటో)\n"
+                    "6. Other (ఇతర - టైప్ చేయండి)")
         else:
             # If not a greeting, treat as business type
             session["state"] = "awaiting_business_type"
@@ -62,8 +68,30 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     # AWAITING_BUSINESS_TYPE state - ask for business type
     elif state == "awaiting_business_type":
         
+        # Map number to business type
+        business_type_map = {
+            "1": "kirana",
+            "2": "tailor",
+            "3": "salon",
+            "4": "vegetable vendor",
+            "5": "auto",
+            "6": "other"
+        }
+        
+        user_input = message.strip()
+        
+        # Check if user selected "other" option
+        if user_input == "6" or user_input.lower() == "other":
+            session["state"] = "awaiting_custom_business_type"
+            return "మీ వ్యాపార రకం టైప్ చేయండి:"
+        
+        # Map number to business type or use direct input
+        if user_input in business_type_map:
+            business_type = business_type_map[user_input]
+        else:
+            business_type = user_input
+        
         # Call discover_schemes
-        business_type = message
         schemes_result = discover_schemes(business_type)
         
         # Check if schemes were found
@@ -115,6 +143,55 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         
         return schemes_result
     
+    # AWAITING_CUSTOM_BUSINESS_TYPE state - user types custom business
+    elif state == "awaiting_custom_business_type":
+        business_type = message.strip()
+        
+        # Call discover_schemes
+        schemes_result = discover_schemes(business_type)
+        
+        # Check if schemes were found
+        if "కనుగొనబడలేదు" in schemes_result:
+            return schemes_result
+        
+        data["business_type"] = business_type
+        
+        # Get matched schemes
+        import json
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        schemes_file = os.path.join(current_dir, "data", "schemes.json")
+        
+        try:
+            with open(schemes_file, "r", encoding="utf-8") as f:
+                all_schemes = json.load(f)
+        except:
+            all_schemes = []
+        
+        from skills.discover import keyword_map
+        business_type_lower = business_type.lower()
+        variants = keyword_map.get(business_type_lower, [business_type_lower])
+        
+        matched_schemes = []
+        for scheme in all_schemes:
+            target_types = [bt.lower() for bt in scheme.get("target_business_types", [])]
+            business_match = False
+            for variant in variants:
+                for target in target_types:
+                    if variant in target or target in variant:
+                        business_match = True
+                        break
+                if business_match:
+                    break
+            
+            if business_match:
+                matched_schemes.append(scheme)
+        
+        data["matched_schemes"] = matched_schemes
+        session["state"] = "discovered"
+        
+        return schemes_result
+    
     # DISCOVERED state - user selects a scheme
     elif state == "discovered":
         try:
@@ -125,7 +202,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
                 session["state"] = "eligibility"
                 data["eligibility_step"] = 0
                 data["user_profile"] = {}
-                return "మీ వ్యక్తిగత వివరాలు అడుగుతూ ఉన్నాను...\n\n(1) మీ లింగం చెప్పండి (male/female/other):"
+                return "మీ వ్యక్తిగత వివరాలు అడుగుతూ ఉన్నాను...\n\n(1) మీ లింగం చెప్పండి:\n1. Male (పురుషుడు)\n2. Female (స్త్రీ)\n3. Other (ఇతర)"
             else:
                 return "చెల్లని సంఖ్య. దయచేసి చెల్లుబాటుయ్యే సంఖ్య టైప్ చేయండి."
         except ValueError:
@@ -137,29 +214,36 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         
         # Step 0: Gender
         if step == 0:
-            gender_input = message.lower()
-            if gender_input in ["male", "female", "other", "చేసిన", "కూతురు", "ఇతర"]:
-                if gender_input in ["male", "చేసిన"]:
-                    data["user_profile"]["gender"] = "male"
-                elif gender_input in ["female", "కూతురు"]:
-                    data["user_profile"]["gender"] = "female"
-                else:
-                    data["user_profile"]["gender"] = gender_input
-                
+            gender_input = message.strip()
+            if gender_input in ["1", "male", "పురుషుడు"]:
+                data["user_profile"]["gender"] = "male"
                 data["eligibility_step"] = 1
-                return "(2) మీ కులం చెప్పండి (general/sc/st/obc):"
+                return "(2) మీ కులం చెప్పండి:\n1. General\n2. SC\n3. ST\n4. OBC\n5. Minority"
+            elif gender_input in ["2", "female", "స్త్రీ"]:
+                data["user_profile"]["gender"] = "female"
+                data["eligibility_step"] = 1
+                return "(2) మీ కులం చెప్పండి:\n1. General\n2. SC\n3. ST\n4. OBC\n5. Minority"
+            elif gender_input in ["3", "other", "ఇతర"]:
+                data["user_profile"]["gender"] = "other"
+                data["eligibility_step"] = 1
+                return "(2) మీ కులం చెప్పండి:\n1. General\n2. SC\n3. ST\n4. OBC\n5. Minority"
             else:
-                return "చెల్లని ఇన్పుట్. దయచేసి male, female, లేదా other చెప్పండి."
+                return "చెల్లని ఇన్పుట్. దయచేసి 1, 2, లేదా 3 ఎంచుకోండి."
         
         # Step 1: Caste
         elif step == 1:
-            caste_input = message.lower()
-            if caste_input in ["general", "sc", "st", "obc"]:
+            caste_map = {"1": "general", "2": "sc", "3": "st", "4": "obc", "5": "minority"}
+            caste_input = message.strip().lower()
+            if caste_input in caste_map:
+                data["user_profile"]["caste"] = caste_map[caste_input]
+                data["eligibility_step"] = 2
+                return "(3) మీ వయసు చెప్పండి (సంఖ్యలో):"
+            elif caste_input in ["general", "sc", "st", "obc", "minority"]:
                 data["user_profile"]["caste"] = caste_input
                 data["eligibility_step"] = 2
                 return "(3) మీ వయసు చెప్పండి (సంఖ్యలో):"
             else:
-                return "చెల్లని ఇన్పుట్. దయచేసి general, sc, st, లేదా obc చెప్పండి."
+                return "చెల్లని ఇన్పుట్. దయచేసి 1, 2, 3, 4, లేదా 5 ఎంచుకోండి."
         
         # Step 2: Age
         elif step == 2:
@@ -168,7 +252,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
                 if age > 0 and age < 150:
                     data["user_profile"]["age"] = age
                     data["eligibility_step"] = 3
-                    return "(4) మీకు GST registration ఉందా? (yes/no):"
+                    return "(4) మీకు GST registration ఉందా?\n1. Yes (అవును)\n2. No (లేదు)"
                 else:
                     return "చెల్లని వయస్సు. దయచేసి 1 నుండి 149 మధ్య సంఖ్య చెప్పండి."
             except ValueError:
@@ -176,34 +260,41 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         
         # Step 3: GST
         elif step == 3:
-            gst_input = message.lower()
-            if gst_input in ["yes", "no", "అవన్న", "లేదు"]:
-                has_gst = gst_input in ["yes", "అవన్న"]
-                data["user_profile"]["has_gst"] = has_gst
+            gst_input = message.strip()
+            if gst_input in ["1", "yes", "అవును"]:
+                data["user_profile"]["has_gst"] = True
                 data["eligibility_step"] = 4
-                return "(5) మీకు bank account ఉందా? (yes/no):"
+                return "(5) మీకు bank account ఉందా?\n1. Yes (అవును)\n2. No (లేదు)"
+            elif gst_input in ["2", "no", "లేదు"]:
+                data["user_profile"]["has_gst"] = False
+                data["eligibility_step"] = 4
+                return "(5) మీకు bank account ఉందా?\n1. Yes (అవును)\n2. No (లేదు)"
             else:
-                return "చెల్లని ఇన్పుట్. దయచేసి yes లేదా no చెప్పండి."
+                return "చెల్లని ఇన్పుట్. దయచేసి 1 లేదా 2 ఎంచుకోండి."
         
         # Step 4: Bank Account
         elif step == 4:
-            bank_input = message.lower()
-            if bank_input in ["yes", "no", "అవన్న", "లేదు"]:
-                has_bank = bank_input in ["yes", "అవన్న"]
-                data["user_profile"]["has_bank_account"] = has_bank
-                
-                # Now call check_eligibility
+            bank_input = message.strip()
+            if bank_input in ["1", "yes", "అవును"]:
+                data["user_profile"]["has_bank_account"] = True
                 session["state"] = "eligibility_result"
                 result = check_eligibility(data["current_scheme_id"], data["user_profile"])
-                
                 return (
                     result + 
-                    "\n\n📋 డాక్యుమెంట్‌ల కోసం, 'documents' టైప్ చేయండి.\n" +
+                    "\n\n📋 డాక్యుమెంట్ల కోసం, 'documents' టైప్ చేయండి.\n" +
+                    "🔄 మరొక పథకం కోసం, 'restart' టైప్ చేయండి."
+                )
+            elif bank_input in ["2", "no", "లేదు"]:
+                data["user_profile"]["has_bank_account"] = False
+                session["state"] = "eligibility_result"
+                result = check_eligibility(data["current_scheme_id"], data["user_profile"])
+                return (
+                    result + 
+                    "\n\n📋 డాక్యుమెంట్ల కోసం, 'documents' టైప్ చేయండి.\n" +
                     "🔄 మరొక పథకం కోసం, 'restart' టైప్ చేయండి."
                 )
             else:
-                return "చెల్లని ఇన్పుట్. దయచేసి yes లేదా no చెప్పండి."
-    
+                return "చెల్లని ఇన్పుట్. దయచేసి 1 లేదా 2 ఎంచుకోండి."
     # ELIGIBILITY_RESULT state - show result and options
     elif state == "eligibility_result":
         if message.lower() in ["restart", "మళ్లీ", "మరు"]:
@@ -213,7 +304,13 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
             data["current_scheme_id"] = None
             data["eligibility_step"] = 0
             data["user_profile"] = {}
-            return "నమస్కారం! 🙏 మీ వ్యాపార రకం చెప్పండి (ఉదా: kirana, tailor, salon)"
+            return ("నమస్కారం! 🙏 మీ వ్యాపార రకం ఎంచుకోండి:\n\n"
+                    "1. Kirana/Grocery (కిరాణా)\n"
+                    "2. Tailor (టైలర్)\n"
+                    "3. Salon/Beauty (సెలూన్)\n"
+                    "4. Vegetable Vendor (కూరగాయల వ్యాపారి)\n"
+                    "5. Auto (ఆటో)\n"
+                    "6. Other (ఇతర - టైప్ చేయండి)")
         elif message.lower() in ["documents", "డాక్యుమెంట్స్", "docs"]:
             result = get_document_guide(data["current_scheme_id"])
             return result
