@@ -1,11 +1,54 @@
+import requests
+import os
+from dotenv import load_dotenv
 from skills.discover import discover_schemes
 from skills.eligibility import check_eligibility
 from skills.documents import get_document_guide
 from typing import Dict, Any
 
+load_dotenv()
 
 # List of greeting words to detect
 GREETINGS = ["hi", "hello", "hey", "నమస్కారం", "start", "help"]
+
+
+def ask_llm(prompt: str) -> str:
+    try:
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 2048
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"LLM Error: {e}")
+        return "unknown"
+
+
+def answer_scheme_question(question: str, schemes_context: str) -> str:
+    prompt = f"""You are a helpful government scheme assistant for Telangana, India.
+Answer the user's question in Telugu based on the schemes data provided.
+Keep the answer short, clear and helpful.
+If the answer is not in the schemes data, say "ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి"
+
+Schemes Data:
+{schemes_context}
+
+User Question: {question}
+
+Answer in Telugu:"""
+    return ask_llm(prompt)
 
 
 def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any]]) -> str:
@@ -40,6 +83,20 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     session = sessions[user_id]
     state = session["state"]
     data = session["data"]
+
+    # General scheme Q&A using LLM
+    question_words = ["ఎంత", "ఏమి", "ఎలా", "అర్హత", "documents"]
+    if message.endswith("?") or any(word in message.lower() for word in question_words):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        schemes_file = os.path.join(current_dir, "data", "schemes.json")
+        try:
+            with open(schemes_file, "r", encoding="utf-8") as f:
+                schemes_context = f.read()
+            if len(schemes_context) > 8000:
+                schemes_context = schemes_context[:8000]
+            return answer_scheme_question(message, schemes_context)
+        except Exception:
+            return "ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి"
     
     # Check for restart request (can happen at any time)
     if message.lower() in ["restart", "మళ్లీ", "మరు"]:
@@ -141,7 +198,6 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         # Extract scheme IDs from data to know which schemes matched
         # Re-run discover to get actual scheme objects (we need IDs)
         import json
-        import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
         schemes_file = os.path.join(current_dir, "data", "schemes.json")
         
@@ -190,7 +246,6 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         
         # Get matched schemes
         import json
-        import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
         schemes_file = os.path.join(current_dir, "data", "schemes.json")
         
@@ -404,7 +459,6 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
             
             # Find matching individual schemes
             import json
-            import os
             current_dir = os.path.dirname(os.path.abspath(__file__))
             schemes_file = os.path.join(current_dir, "data", "schemes.json")
             
