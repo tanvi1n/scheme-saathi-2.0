@@ -42,9 +42,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     user_id = str(update.effective_user.id)
     
-    # Send welcome message
-    welcome_msg = "నమస్కారం! 🙏 మీ వ్యాపార రకం చెప్పండి (ఉదా: kirana, tailor, salon)"
-    await update.message.reply_text(welcome_msg)
+    # Use agent's handle_message with "hi" to trigger proper flow
+    response = handle_message(user_id, "hi", sessions)
+    await update.message.reply_text(response)
 
 
 def main():
