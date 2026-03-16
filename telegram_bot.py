@@ -69,6 +69,16 @@ def create_scheme_selection_buttons(num_schemes):
     return InlineKeyboardMarkup(buttons)
 
 
+def create_eligibility_result_buttons():
+    """Create buttons for eligibility result actions"""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📋 Documents చూడండి", callback_data="result_documents"),
+            InlineKeyboardButton("🔄 మళ్ళీ మొదలు", callback_data="result_restart")
+        ]
+    ])
+
+
 def get_button_response(text, callback_data):
     """Determine if response needs buttons and which type"""
     if "మీరు ఏ రకమైన పథకాలు" in text:
@@ -87,6 +97,8 @@ def get_button_response(text, callback_data):
         return create_yes_no_buttons("ration")
     elif "వ్యవసాయ భూమి ఉందా" in text:
         return create_yes_no_buttons("land")
+    elif "📋 డాక్యుమెంట్ల కోసం" in text and "🔄 మరొక పథకం కోసం" in text:
+        return create_eligibility_result_buttons()
     elif "ఏది మరింత తెలుసుకోవాలి" in text or "ఏ పథకం గురించి మరింత తెలుసుకోవాలి" in text:
         # Count schemes in the text
         import re
@@ -168,7 +180,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         # Scheme selection (1-8)
         "scheme_1": "1", "scheme_2": "2", "scheme_3": "3", "scheme_4": "4",
-        "scheme_5": "5", "scheme_6": "6", "scheme_7": "7", "scheme_8": "8"
+        "scheme_5": "5", "scheme_6": "6", "scheme_7": "7", "scheme_8": "8",
+        
+        # Eligibility result actions
+        "result_documents": "documents",
+        "result_restart": "restart"
     }
     
     # Convert button click to text input
@@ -217,6 +233,141 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(response)
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /help command - Show usage guide.
+    
+    Args:
+        update: The update object containing the message
+        context: The context object
+    """
+    help_text = """🤝 *scheme-saathi సహాయం* 🤝
+
+scheme-saathi అనేది విస్తృత సరकార పథకాల గురించి తెలుసుకోవడానికి సహాయం చేసే బాట్.
+
+*ఎలా ఉపయోగించాలి:*
+
+1️⃣ /start నొక్కండి లేదా "start" టైప్ చేయండి
+2️⃣ మీ వ్యాపార రకం चెप్పండి (kirana, tailor, salon, etc.)
+3️⃣ లభ్యమైన పథకాలను చూడండి
+4️⃣ అర్హతను తనిఖీ చేయండి (3-4 ప్రశ్నలకు సమాధానం ఇవ్వండి)
+5️⃣ అవసరమైన డాక్యుమెంట్‌ల జాబితాను పొందండి
+
+*ఎక్కువ సమాచారం:*
+• /about - బాట్ గురించి తెలుసుకోండి
+• /restart - కొత్త సెషన్ ప్రారంభించండి
+• /documents - డాక్యుమెంట్‌ల గురించి సూచనలు
+
+ఏ సమయ కూడా తెలుసుకోవడానికి సంకోచించవద్దు! 😊"""
+    
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+
+async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /restart command - Clear session and start fresh.
+    
+    Args:
+        update: The update object containing the message
+        context: The context object
+    """
+    user_id = str(update.effective_user.id)
+    
+    # Clear user session
+    if user_id in sessions:
+        sessions.pop(user_id)
+    
+    # Send restart message
+    response_text = "✅ సెషన్ క్లియర్ చేయబడింది! కొత్త వృత్తం ప్రారంభమవుతోంది... \n\n"
+    
+    # Restart the conversation
+    response = handle_message(user_id, "hi", sessions)
+    response_text += response
+    
+    # Check if response needs buttons
+    buttons = get_button_response(response, None)
+    
+    # Send response with buttons if needed
+    if buttons:
+        await update.message.reply_text(response_text, reply_markup=buttons)
+    else:
+        await update.message.reply_text(response_text)
+
+
+async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /documents command - Show document guide information.
+    
+    Args:
+        update: The update object containing the message
+        context: The context object
+    """
+    docs_text = """📄 *డాక్యుమెంట్‌ల గురించి సమాచారం* 📄
+
+scheme-saathi బాట్ ఏ పథకం కోసం ఏ నిర్దిష్ట డాక్యుమెంట్‌లు అవసరమైనవో చెప్పుతుంది.
+
+*సాధారణ డాక్యుమెంట్‌లు (చాలా పథకాలకు అవసరం):*
+✅ Aadhaar Card (ఆధార్ కార్డు)
+✅ Bank Passbook - మొదటి పేజీ (బ్యాంక్ పాస్‌బుక్)
+✅ Phone Number (ఫోన్ నంబర్)
+
+*కమ్యూనిటీ ఆధారిత డాక్యుమెంట్‌లు:*
+📋 Caste Certificate (కులం సర్టిఫికేట్) → MeeSeva కేంద్రం
+📋 Income Certificate (ఆదాయ సర్టిఫికేట్) → TahasildarOffice
+📋 Ration Card (నిషేధ కార్డు) → FoodSupply
+
+*GST సంబంధిత డాక్యుమెంట్‌లు (వ్యాపారం కోసం):*
+💼 GST Certificate (జిఎస్టీ సర్టిఫికేట్) - GST Portal నుండి
+💼 ITR/Form 16 - TDS సంబంధిత
+
+*ఎక్కువ సమాచారం:*
+📍 /start ఉపయోగించిన తర్వాత, పథకం ఎంచుకున్న తర్వాత సరిసరి డాక్యుమెంట్‌ల జాబితా పొందుతారు!
+
+❓ ఇంకా సమస్యలు ఉండితే /help చూడండి!"""
+    
+    await update.message.reply_text(docs_text, parse_mode="Markdown")
+
+
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /about command - Show information about the bot.
+    
+    Args:
+        update: The update object containing the message
+        context: The context object
+    """
+    about_text = """🤝 *scheme-saathi గురించి* 🤝
+
+*సమస్య:*
+తెలంగాణలో 50+ సరకార పథకాలు ఉన్నాయి, కానీ చిన్న వ్యాపారులకు ఎవరు అర్హులు అని తెలియదు. దలాళ్లు ₹5,000–₹50,000 వసూలు చేస్తారు!
+
+*పరిష్కారం:*
+scheme-saathi వంటి పరిష్కారం:
+✅ తెలుగులో పూర్తిగా నిరంకుశ సహాయం
+✅ అర్హతను 3-4 ప్రశ్నలలో తనిఖీ చేయండి
+✅ డాక్యుమెంట్ గైడ్ తక్షణమే పొందండి
+✅ దాకుံలు దూరం - స్వేచ్ఛా సేవ!
+
+*సమర్థిత పథకాలు:*
+📌 PM Vishwakarma (నెసీ స్కీమ్)
+📌 Mudra Loan Yojana (మూడ్రా లోన్)
+📌 PMEGP (ఎంటర్‌ప్రెన్యూర్‌షిప్ స్కీమ్)
+📌 WE-HUB (మహిళా ఎంటర్‌ప్రెన్యూర్‌షిప్)
+📌 చిన్న వ్యాపారం పథకాలు
+
+*సంపర్క సమాచారం:*
+📞 సమస్యలు? /help నొక్కండి
+📧 ఇతర సందేహాలు? supported@scheme-saathi.com
+
+*సంస్కరణ:* 1.0
+*భాష:* తెలుగు + English
+*ప్ల్యాట్‌ఫారమ్:* Telegram
+
+ధన్యవాదాలు! scheme-saathiని ఉపయోగించినందుకు! 🙏"""
+    
+    await update.message.reply_text(about_text, parse_mode="Markdown")
+
+
 def main():
     """Start the Telegram bot."""
     
@@ -227,8 +378,12 @@ def main():
     # Create the Application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
-    # Add /start command handler
+    # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("restart", restart_command))
+    application.add_handler(CommandHandler("documents", documents_command))
+    application.add_handler(CommandHandler("about", about_command))
     
     # Add button click handler
     application.add_handler(CallbackQueryHandler(button_handler))
@@ -238,6 +393,7 @@ def main():
     
     # Start the bot
     print("🤖 scheme-saathi Telegram bot started!")
+    print("📋 Commands available: /start, /help, /restart, /documents, /about")
     application.run_polling()
 
 
