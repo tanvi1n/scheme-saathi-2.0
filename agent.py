@@ -15,6 +15,13 @@ GREETINGS = ["hi", "hello", "hey", "నమస్కారం", "start", "help"]
 def ask_llm(prompt: str) -> str:
     try:
         GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+        system_prompt = (
+            "You are Scheme-Saathi, a high-precision Telangana government schemes assistant. "
+            "Your first priority is factual correctness from provided context only. "
+            "You must support Telugu, English, Hinglish, and transliterated Telugu. "
+            "When context is insufficient, do not guess. "
+            "Keep answers short, clear, citizen-friendly, and action-oriented."
+        )
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -23,9 +30,15 @@ def ask_llm(prompt: str) -> str:
             },
             json={
                 "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 2048
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0,
+                "max_tokens": 768
             },
             timeout=10
         )
@@ -33,21 +46,59 @@ def ask_llm(prompt: str) -> str:
         return response.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(f"LLM Error: {e}")
-        return "unknown"
+        return "ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి"
 
 
 def answer_scheme_question(question: str, schemes_context: str) -> str:
-    prompt = f"""You are a helpful government scheme assistant for Telangana, India.
-Answer the user's question in Telugu based on the schemes data provided.
-Keep the answer short, clear and helpful.
-If the answer is not in the schemes data, say "ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి"
+    prompt = f"""Task: Answer a user's scheme-related question using ONLY the provided Schemes Data.
+
+Hard Constraints (must follow):
+1) Never use outside knowledge. If data is missing/unclear, respond exactly:
+ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి
+2) Understand messy inputs: Telugu, English, Hinglish, transliterated Telugu, ASR errors.
+3) Match user language preference:
+   - Telugu/mixed Telugu -> Telugu response
+   - Clear English -> English response
+4) Keep response concise: 3-6 lines max.
+5) Do not expose internal IDs/fields unless explicitly asked.
+6) If user asks eligibility-style question, include only available criteria from data.
+7) If user asks benefits/amount/documents, provide only what exists in data.
+
+Reasoning Protocol (internal):
+- First, normalize user intent from noisy text.
+- Second, find matching scheme facts in Schemes Data.
+- Third, answer directly with practical next step.
+- If uncertain at any point, output the exact fallback sentence.
+
+Output Style:
+- Plain text only.
+- No markdown headings.
+- No long paragraphs.
+- Prefer numbered points only when multiple facts are required.
+
+Few-shot guidance:
+Example A
+User: "naku business scheme kavali"
+Assistant: "మీ వ్యాపారం రకాన్ని చెప్పండి (ఉదా: కిరాణా, టైలర్, సెలూన్) లేదా అందుబాటులో ఉన్న జాబితా నుండి ఎంచుకోండి."
+
+Example B
+User: "PMEGP amount ఎంత"
+Assistant: "డేటాలో ఉన్న మేరకు, PMEGP కింద లాభం/లోన్ పరిమితి ఇదే: <amount from data>. మరిన్ని వివరాలకు అర్హత ప్రమాణాలు కూడా చూడండి."
+
+Example C
+User: "documents enti"
+Assistant: "ఈ పథకానికి అవసరమైన డాక్యుమెంట్లు: <only listed docs>. డేటాలో లేనివి కోసం సంబంధిత కార్యాలయాన్ని సంప్రదించండి."
+
+Example D
+User: "eligibility cheppu"
+Assistant: "అర్హత ప్రమాణాలు (డేటా ప్రకారం): <criteria only>. మీ వివరాలు చెబితే సరిపోతుందో చెప్తాను."
 
 Schemes Data:
 {schemes_context}
 
-User Question: {question}
-
-Answer in Telugu:"""
+User Question:
+{question}
+"""
     return ask_llm(prompt)
 
 
@@ -96,6 +147,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     
     # Normalize message
     message = message.strip()
+    normalized_message = message.lower()
     
     # Initialize session if not exists
     if user_id not in sessions:
@@ -115,8 +167,10 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     data = session["data"]
 
     # General scheme Q&A using LLM
-    question_words = ["ఎంత", "ఏమి", "ఎలా", "అర్హత", "documents"]
-    if message.endswith("?") or any(word in message.lower() for word in question_words):
+    question_words = [
+        "ఎంత", "ఏమి", "ఎలా", "అర్హత", "documents", "document", "eligibility", "benefit", "amount", "how", "what"
+    ]
+    if message.endswith("?") or any(word in normalized_message for word in question_words):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         schemes_file = os.path.join(current_dir, "data", "schemes.json")
         try:
@@ -129,7 +183,10 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
             return "ఈ సమాచారం నాకు తెలియదు, దయచేసి సంబంధిత కార్యాలయాన్ని సంప్రదించండి"
     
     # Check for restart request (can happen at any time)
-    if message.lower() in ["restart", "మళ్లీ", "మరు"]:
+    if (
+        normalized_message in ["restart", "మళ్లీ", "మరు"]
+        or any(word in normalized_message for word in ["restart", "re start", "రిస్టార్ట్", "రీ స్టార్ట్", "మళ్ళీ", "మళ్లీ"])
+    ):
         session["state"] = "awaiting_scheme_category"
         data["business_type"] = None
         data["scheme_category"] = None
@@ -140,7 +197,10 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
         return ("నమస్కారం! 🙏 మీరు ఏ రకమైన పథకాలు చూడాలనుకుంటున్నారు?")
     
     # Check for documents request (can happen at any time)
-    if message.lower() in ["documents", "డాక్యుమెంట్స్", "docs"]:
+    if (
+        normalized_message in ["documents", "డాక్యుమెంట్స్", "docs"]
+        or any(word in normalized_message for word in ["document", "docs", "డాక్యుమెంట్", "పత్రాలు"])
+    ):
         if data["current_scheme_id"]:
             result = get_document_guide(data["current_scheme_id"])
             return result
@@ -149,7 +209,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     
     # START state - handle greetings
     if state == "start":
-        if message.lower() in GREETINGS or not message:
+        if normalized_message in GREETINGS or not message:
             session["state"] = "awaiting_scheme_category"
             return ("నమస్కారం! 🙏 మీరు ఏ రకమైన పథకాలు చూడాలనుకుంటున్నారు?")
         else:
@@ -160,12 +220,16 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     # AWAITING_SCHEME_CATEGORY state - business or individual
     elif state == "awaiting_scheme_category":
         user_input = message.strip()
+        user_input_normalized = user_input.lower()
         
-        if user_input == "1" or user_input.lower() in ["business", "వ్యాపారం"]:
+        business_keywords = ["business", "scheme", "schemes", "బిజినెస్", "వ్యాపార", "వ్యాపారం", "shop", "shopkeeper", "దుకాణ"]
+        individual_keywords = ["individual", "personal", "వ్యక్తిగత", "individual scheme", "personal scheme"]
+
+        if user_input == "1" or user_input_normalized in ["business", "వ్యాపారం"] or any(word in user_input_normalized for word in business_keywords):
             data["scheme_category"] = "business"
             session["state"] = "awaiting_business_type"
             return ("మీ వ్యాపార రకం ఎంచుకోండి:")
-        elif user_input == "2" or user_input.lower() in ["individual", "వ్యక్తిగత"]:
+        elif user_input == "2" or user_input_normalized in ["individual", "వ్యక్తిగత"] or any(word in user_input_normalized for word in individual_keywords):
             data["scheme_category"] = "individual"
             session["state"] = "individual_eligibility"
             data["eligibility_step"] = 0

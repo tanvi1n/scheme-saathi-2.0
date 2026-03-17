@@ -1,5 +1,10 @@
 import os
+import requests
+import tempfile
+import re
+import unicodedata
 from dotenv import load_dotenv
+from gtts import gTTS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
 from agent import handle_message
@@ -11,6 +16,220 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # In-memory sessions storage
 sessions = {}
+
+
+def _detect_tts_language(text: str) -> str:
+    """Detect Telugu vs English for TTS voice selection."""
+    if re.search(r"[\u0C00-\u0C7F]", text):
+        return "te"
+    return "en"
+
+
+def _is_prompt_like_response(text: str, buttons=None) -> bool:
+    """Speak prompts/questions so users can hear next step."""
+    if buttons:
+        return True
+
+    lowered = text.lower()
+    prompt_markers = [
+        "?", "ఉందా", "చెప్పండి", "ఎంచుకోండి", "type", "టైప్ చేయండి", "more details",
+        "which", "ఏది", "ఏ పథకం"
+    ]
+    return any(marker in lowered for marker in prompt_markers)
+
+
+def _sanitize_tts_text(text: str) -> str:
+    """Remove emojis/decorative symbols so TTS reads cleanly."""
+    cleaned = re.sub(r"https?://\S+", " ", text)
+    cleaned = re.sub(r"[*_`~#\[\](){}]", " ", cleaned)
+
+    filtered_chars = []
+    for char in cleaned:
+        category = unicodedata.category(char)
+        # So (Symbol, other) includes most emojis/pictographs.
+        if category == "So":
+            continue
+        # Drop emoji variation selector.
+        if ord(char) == 0xFE0F:
+            continue
+        filtered_chars.append(char)
+
+    cleaned = "".join(filtered_chars)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+async def _send_tts_reply(message, text: str, buttons=None) -> None:
+    """Send TTS voice note for prompt-like messages."""
+    if not text or not _is_prompt_like_response(text, buttons):
+        return
+
+    sanitized_text = _sanitize_tts_text(text)
+    if not sanitized_text:
+        return
+
+    safe_text = sanitized_text[:500]
+    lang = _detect_tts_language(safe_text)
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio:
+            temp_audio_path = temp_audio.name
+
+        tts = gTTS(text=safe_text, lang=lang)
+        tts.save(temp_audio_path)
+
+        with open(temp_audio_path, "rb") as audio_file:
+            await message.reply_voice(voice=audio_file)
+    except Exception as e:
+        print(f"TTS Error: {e}")
+    finally:
+        if 'temp_audio_path' in locals() and os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
+
+
+def _extract_first_number(text: str):
+    import re
+    match = re.search(r"\d+", text)
+    return match.group(0) if match else None
+
+
+def _map_yes_no(text: str):
+    cleaned = text.strip().lower()
+    if any(word in cleaned for word in ["అవును", "yes", "yeah", "yep", "ఉంది"]):
+        return "1"
+    if any(word in cleaned for word in ["లేదు", "లేద", "no", "nope"]):
+        return "2"
+    return None
+
+
+def normalize_voice_input(user_id: str, transcribed_text: str) -> str:
+    """Map imperfect speech transcription into values expected by the agent state."""
+    cleaned = transcribed_text.strip().lower()
+
+    # Global command mapping
+    if any(word in cleaned for word in ["restart", "re start", "రిస్టార్ట్", "రీ స్టార్ట్", "మళ్ళీ", "మళ్లీ", "మరు"]):
+        return "restart"
+    if any(word in cleaned for word in ["documents", "docs", "డాక్యుమెంట్స్", "డాక్యుమెంట్లు", "పత్రాలు"]):
+        return "documents"
+
+    session = sessions.get(user_id, {})
+    state = session.get("state")
+    data = session.get("data", {})
+    number_value = _extract_first_number(cleaned)
+
+    if state == "awaiting_scheme_category":
+        if any(word in cleaned for word in ["business", "బిజినెస్", "వ్యాపార", "shop", "దుకాణ"]):
+            return "1"
+        if any(word in cleaned for word in ["individual", "వ్యక్తిగత", "personal"]):
+            return "2"
+
+    if state == "awaiting_business_type":
+        business_map = {
+            "1": ["kirana", "grocery", "కిరాణ"],
+            "2": ["tailor", "టైలర్", "సిలాయి", "stitch"],
+            "3": ["salon", "beauty", "సెలూన్", "బ్యూటీ"],
+            "4": ["vegetable", "కూరగాయ", "వెజిటబుల్"],
+            "5": ["auto", "ఆటో", "rickshaw"],
+            "6": ["other", "ఇతర"]
+        }
+        for choice, words in business_map.items():
+            if any(word in cleaned for word in words):
+                return choice
+
+    if state in ["eligibility", "individual_eligibility"]:
+        step = data.get("eligibility_step", 0)
+
+        if step == 0:
+            if any(word in cleaned for word in ["male", "man", "పురుష", "అబ్బాయి"]):
+                return "1"
+            if any(word in cleaned for word in ["female", "woman", "స్త్రీ", "మహిళ", "అమ్మాయి"]):
+                return "2"
+            if any(word in cleaned for word in ["other", "ఇతర"]):
+                return "3"
+
+        if step == 1:
+            caste_map = {
+                "1": ["general", "oc"],
+                "2": ["sc"],
+                "3": ["st"],
+                "4": ["obc", "bc"],
+                "5": ["minority", "మైనారిటీ"]
+            }
+            for choice, words in caste_map.items():
+                if any(word == cleaned or word in cleaned.split() for word in words):
+                    return choice
+
+        if step == 2 and number_value:
+            return number_value
+
+        if step in [3, 4]:
+            yes_no = _map_yes_no(cleaned)
+            if yes_no:
+                return yes_no
+
+    if state in ["discovered", "individual_discovered"] and number_value:
+        return number_value
+
+    if state == "scheme_specific_question":
+        pending_q = data.get("pending_question")
+        if pending_q == "land_ownership":
+            yes_no = _map_yes_no(cleaned)
+            if yes_no:
+                return yes_no
+        if pending_q in ["annual_income", "monthly_units"] and number_value:
+            return number_value
+
+    direct_map = {
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+        "six": "6", "seven": "7", "eight": "8",
+        "ఒకటి": "1", "రెండు": "2", "మూడు": "3", "నాలుగు": "4", "ఐదు": "5",
+        "ఆరు": "6", "ఏడు": "7", "ఎనిమిది": "8",
+        "yes": "1", "no": "2", "అవును": "1", "లేదు": "2"
+    }
+    return direct_map.get(cleaned, transcribed_text)
+
+
+def transcribe_voice_to_text(audio_file_path: str) -> str:
+    """
+    Transcribe audio file to text using Groq Whisper API.
+    
+    Args:
+        audio_file_path: Path to the audio file
+        
+    Returns:
+        Transcribed text or error message
+    """
+    try:
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+        if not GROQ_API_KEY:
+            return "❌ Voice API not configured. Please contact administrator."
+        
+        with open(audio_file_path, "rb") as f:
+            response = requests.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                files={"file": ("audio.ogg", f, "audio/ogg")},
+                data={
+                    "model": "whisper-large-v3",
+                    "temperature": "0",
+                    "prompt": "Audio may contain Telugu, English, and Hinglish terms about government schemes, business types, numbers, and yes/no answers."
+                },
+                timeout=30
+            )
+        
+        if response.status_code == 200:
+            transcribed_text = response.json().get("text", "").strip()
+            if transcribed_text:
+                return transcribed_text
+            else:
+                return "❌ Could not understand the audio. Please try speaking clearly."
+        else:
+            error_msg = response.json().get("error", {}).get("message", "Unknown error")
+            print(f"Groq API Error: {error_msg}")
+            return f"❌ Transcription error: {error_msg[:50]}"
+    except Exception as e:
+        print(f"Voice Transcription Error: {e}")
+        return f"❌ Error processing voice message: {str(e)[:50]}"
 
 
 def create_scheme_category_buttons():
@@ -69,16 +288,6 @@ def create_scheme_selection_buttons(num_schemes):
     return InlineKeyboardMarkup(buttons)
 
 
-def create_eligibility_result_buttons():
-    """Create buttons for eligibility result actions"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📋 Documents చూడండి", callback_data="result_documents"),
-            InlineKeyboardButton("🔄 మళ్ళీ మొదలు", callback_data="result_restart")
-        ]
-    ])
-
-
 def get_button_response(text, callback_data):
     """Determine if response needs buttons and which type"""
     if "మీరు ఏ రకమైన పథకాలు" in text:
@@ -97,8 +306,6 @@ def get_button_response(text, callback_data):
         return create_yes_no_buttons("ration")
     elif "వ్యవసాయ భూమి ఉందా" in text:
         return create_yes_no_buttons("land")
-    elif "📋 డాక్యుమెంట్ల కోసం" in text and "🔄 మరొక పథకం కోసం" in text:
-        return create_eligibility_result_buttons()
     elif "ఏది మరింత తెలుసుకోవాలి" in text or "ఏ పథకం గురించి మరింత తెలుసుకోవాలి" in text:
         # Count schemes in the text
         import re
@@ -130,6 +337,73 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(response, reply_markup=buttons)
     else:
         await update.message.reply_text(response)
+
+    await _send_tts_reply(update.message, response, buttons)
+
+
+async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle incoming voice messages from users.
+    
+    Args:
+        update: The update object containing the voice message
+        context: The context object
+    """
+    try:
+        user_id = str(update.effective_user.id)
+        
+        # Show typing indicator
+        await update.message.chat.send_action("typing")
+        
+        # Download voice file
+        voice_file = await update.message.voice.get_file()
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp_file:
+            tmp_file_path = tmp_file.name
+        
+        # Download to file
+        await voice_file.download_to_drive(tmp_file_path)
+        
+        try:
+            # Transcribe voice to text
+            transcribed_text = transcribe_voice_to_text(tmp_file_path)
+            
+            # If transcription failed, send error
+            if transcribed_text.startswith("❌"):
+                await update.message.reply_text(transcribed_text)
+                return
+            final_text = normalize_voice_input(user_id, transcribed_text)
+            
+            # Send transcribed text back to user
+            display_text = f"🎤 Your message:\n\n{final_text}"
+            if final_text != transcribed_text:
+                display_text += f"\n\n(heard as: {transcribed_text})"
+            await update.message.reply_text(display_text)
+            
+            # Get response from agent
+            response = handle_message(user_id, final_text, sessions)
+            
+            # Check if response needs buttons
+            buttons = get_button_response(response, None)
+            
+            # Send response back to user
+            if buttons:
+                await update.message.reply_text(response, reply_markup=buttons)
+            else:
+                await update.message.reply_text(response)
+
+            await _send_tts_reply(update.message, response, buttons)
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_file_path):
+                os.remove(tmp_file_path)
+    except Exception as e:
+        print(f"Voice Message Handler Error: {e}")
+        try:
+            await update.message.reply_text(f"❌ Error processing voice message: {str(e)[:100]}")
+        except Exception:
+            print("Voice error reply failed")
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -180,11 +454,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         # Scheme selection (1-8)
         "scheme_1": "1", "scheme_2": "2", "scheme_3": "3", "scheme_4": "4",
-        "scheme_5": "5", "scheme_6": "6", "scheme_7": "7", "scheme_8": "8",
-        
-        # Eligibility result actions
-        "result_documents": "documents",
-        "result_restart": "restart"
+        "scheme_5": "5", "scheme_6": "6", "scheme_7": "7", "scheme_8": "8"
     }
     
     # Convert button click to text input
@@ -202,12 +472,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await query.edit_message_text(response, reply_markup=buttons)
         else:
             await query.edit_message_text(response)
+
+        await _send_tts_reply(query.message, response, buttons)
     except Exception:
         # If edit fails, send new message
         if buttons:
             await query.message.reply_text(response, reply_markup=buttons)
         else:
             await query.message.reply_text(response)
+
+        await _send_tts_reply(query.message, response, buttons)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -231,6 +505,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(response, reply_markup=buttons)
     else:
         await update.message.reply_text(response)
+
+    await _send_tts_reply(update.message, response, buttons)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -292,6 +568,8 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(response_text, reply_markup=buttons)
     else:
         await update.message.reply_text(response_text)
+
+    await _send_tts_reply(update.message, response, buttons)
 
 
 async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -388,12 +666,17 @@ def main():
     # Add button click handler
     application.add_handler(CallbackQueryHandler(button_handler))
     
+    # Add voice message handler
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
+    
     # Add a message handler for all text messages (excluding commands)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
     # Start the bot
     print("🤖 scheme-saathi Telegram bot started!")
     print("📋 Commands available: /start, /help, /restart, /documents, /about")
+    print("🎤 Voice input: Send voice messages for transcription and processing!")
+    print("🧠 Voice parser: v2 (state-aware normalization enabled)")
     application.run_polling()
 
 
