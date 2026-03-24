@@ -80,11 +80,19 @@ ollama serve
 
 # 4. Configure your Telegram bot token
 cp .env.example .env
-nano .env  # Add your bot token
+nano .env  # Add TELEGRAM_BOT_TOKEN, GROQ_API_KEY, ADMIN_USER_IDS
 
 # 5. Start the agent
 nanobot gateway
 ```
+
+### Admin-only activity tracking
+
+- Usage activity is stored in JSONL at `ACTIVITY_LOG_PATH` (default: `data/activity_log.jsonl`)
+- Only Telegram user IDs listed in `ADMIN_USER_IDS` can view logs
+- Admin commands:
+        - `/activity` → recent users who used the bot
+        - `/stats` → total usage counters and event breakdown
 
 ---
 

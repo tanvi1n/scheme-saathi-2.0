@@ -8,14 +8,48 @@ from gtts import gTTS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
 from agent import handle_message
+from activity_logger import log_activity, get_recent_user_activity, get_activity_stats
 
 
 # Load environment variables
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ACTIVITY_LOG_PATH = os.getenv("ACTIVITY_LOG_PATH", "data/activity_log.jsonl")
+
+
+def _parse_admin_user_ids(raw_value: str):
+    if not raw_value:
+        return set()
+    return {item.strip() for item in raw_value.split(",") if item.strip()}
+
+
+ADMIN_USER_IDS = _parse_admin_user_ids(os.getenv("ADMIN_USER_IDS", ""))
 
 # In-memory sessions storage
 sessions = {}
+
+
+def _build_display_name(user) -> str:
+    first_name = user.first_name or ""
+    last_name = user.last_name or ""
+    full_name = f"{first_name} {last_name}".strip()
+    return full_name or "Unknown"
+
+
+def _log_user_activity(user, chat_id: str, event_type: str, route: str) -> None:
+    log_activity(
+        file_path=ACTIVITY_LOG_PATH,
+        event_type=event_type,
+        user_id=str(user.id),
+        chat_id=str(chat_id),
+        route=route,
+        username=user.username or "",
+        display_name=_build_display_name(user),
+    )
+
+
+def _is_admin_user(user_id: str) -> bool:
+    return user_id in ADMIN_USER_IDS
 
 
 def _detect_tts_language(text: str) -> str:
@@ -325,6 +359,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Get user ID and message text
     user_id = str(update.effective_user.id)
     message_text = update.message.text
+
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="text_message",
+        route="text_handler",
+    )
     
     # Get response from agent
     response = handle_message(user_id, message_text, sessions)
@@ -351,6 +392,13 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     try:
         user_id = str(update.effective_user.id)
+
+        _log_user_activity(
+            user=update.effective_user,
+            chat_id=str(update.effective_chat.id),
+            event_type="voice_message",
+            route="voice_handler",
+        )
         
         # Show typing indicator
         await update.message.chat.send_action("typing")
@@ -419,6 +467,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     user_id = str(query.from_user.id)
     callback_data = query.data
+
+    _log_user_activity(
+        user=query.from_user,
+        chat_id=str(query.message.chat.id),
+        event_type="button_click",
+        route=f"callback:{callback_data}",
+    )
     
     # Convert button callback to text input that agent understands
     button_to_text = {
@@ -493,6 +548,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         context: The context object
     """
     user_id = str(update.effective_user.id)
+
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="command_start",
+        route="/start",
+    )
     
     # Use agent's handle_message with "hi" to trigger proper flow
     response = handle_message(user_id, "hi", sessions)
@@ -517,6 +579,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         update: The update object containing the message
         context: The context object
     """
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="command_help",
+        route="/help",
+    )
+
     help_text = """🤝 *scheme-saathi సహాయం* 🤝
 
 scheme-saathi అనేది విస్తృత సరकార పథకాల గురించి తెలుసుకోవడానికి సహాయం చేసే బాట్.
@@ -548,6 +617,13 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context: The context object
     """
     user_id = str(update.effective_user.id)
+
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="command_restart",
+        route="/restart",
+    )
     
     # Clear user session
     if user_id in sessions:
@@ -580,6 +656,13 @@ async def documents_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         update: The update object containing the message
         context: The context object
     """
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="command_documents",
+        route="/documents",
+    )
+
     docs_text = """📄 *డాక్యుమెంట్‌ల గురించి సమాచారం* 📄
 
 scheme-saathi బాట్ ఏ పథకం కోసం ఏ నిర్దిష్ట డాక్యుమెంట్‌లు అవసరమైనవో చెప్పుతుంది.
@@ -614,6 +697,13 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         update: The update object containing the message
         context: The context object
     """
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="command_about",
+        route="/about",
+    )
+
     about_text = """🤝 *scheme-saathi గురించి* 🤝
 
 *సమస్య:*
@@ -646,6 +736,76 @@ scheme-saathi వంటి పరిష్కారం:
     await update.message.reply_text(about_text, parse_mode="Markdown")
 
 
+async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /activity command - Admin-only recent user activity."""
+    user_id = str(update.effective_user.id)
+
+    if not _is_admin_user(user_id):
+        await update.message.reply_text("⛔ You are not authorized to view activity logs.")
+        return
+
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="admin_command_activity",
+        route="/activity",
+    )
+
+    users = get_recent_user_activity(ACTIVITY_LOG_PATH, limit=20)
+    if not users:
+        await update.message.reply_text("📭 No activity found yet.")
+        return
+
+    lines = ["🛡️ *Recent Bot Users*", ""]
+    for index, user in enumerate(users, start=1):
+        name = user.get("display_name") or "Unknown"
+        username = user.get("username")
+        username_text = f" (@{username})" if username else ""
+        lines.append(
+            f"{index}. {name}{username_text} | ID: {user['telegram_user_id']} | Uses: {user['count']}"
+        )
+        lines.append(f"   Last seen: {user.get('last_seen', '-')}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /stats command - Admin-only usage stats."""
+    user_id = str(update.effective_user.id)
+
+    if not _is_admin_user(user_id):
+        await update.message.reply_text("⛔ You are not authorized to view usage stats.")
+        return
+
+    _log_user_activity(
+        user=update.effective_user,
+        chat_id=str(update.effective_chat.id),
+        event_type="admin_command_stats",
+        route="/stats",
+    )
+
+    stats = get_activity_stats(ACTIVITY_LOG_PATH)
+    lines = [
+        "📊 Bot Usage Stats",
+        "",
+        f"• Total activity events: {stats['total_events']}",
+        f"• Total unique users: {stats['total_unique_users']}",
+        f"• Today's events: {stats['today_events']}",
+        f"• Today's unique users: {stats['today_unique_users']}",
+        "",
+        "Event breakdown:",
+    ]
+
+    breakdown = stats.get("event_breakdown", {})
+    if not breakdown:
+        lines.append("• No events yet")
+    else:
+        for event_name, event_count in sorted(breakdown.items(), key=lambda item: item[0]):
+            lines.append(f"• {event_name}: {event_count}")
+
+    await update.message.reply_text("\n".join(lines))
+
+
 def main():
     """Start the Telegram bot."""
     
@@ -662,6 +822,8 @@ def main():
     application.add_handler(CommandHandler("restart", restart_command))
     application.add_handler(CommandHandler("documents", documents_command))
     application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(CommandHandler("activity", activity_command))
+    application.add_handler(CommandHandler("stats", stats_command))
     
     # Add button click handler
     application.add_handler(CallbackQueryHandler(button_handler))
@@ -675,6 +837,7 @@ def main():
     # Start the bot
     print("🤖 scheme-saathi Telegram bot started!")
     print("📋 Commands available: /start, /help, /restart, /documents, /about")
+    print("🛡️ Admin commands: /activity, /stats")
     print("🎤 Voice input: Send voice messages for transcription and processing!")
     print("🧠 Voice parser: v2 (state-aware normalization enabled)")
     application.run_polling()
