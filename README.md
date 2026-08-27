@@ -1,157 +1,244 @@
 # scheme-saathi 🤝
-> సాథి — Your trusted companion for government schemes
+
+> Telugu-first Telegram bot that helps small business owners in Telangana discover and apply for government schemes — for free, without middlemen.
 
 ---
 
-## 🎯 Problem
+## The problem
 
-Small businesses in Telangana are leaving **crores of rupees on the table.**
+50+ government schemes exist specifically for kirana owners, tailors, vegetable vendors, salon workers, and women entrepreneurs in Telangana — PM Vishwakarma, Mudra Loan, PMEGP, WE-HUB, Dalit Bandhu, and more.
 
-50+ government schemes (PM Vishwakarma, Mudra Loan, PMEGP, WE-HUB) exist specifically for kirana owners, tailors, vegetable vendors, and salon workers — but most never apply because:
+Most people never apply because:
 
-- 🌐 All information is in English on complex government portals
-- 😕 They don't know which schemes they qualify for
-- 📄 Document requirements are unclear and overwhelming
-- 💸 Middlemen charge ₹5,000–₹50,000 to "help" — and often cheat them
-- 📉 Result: They take private loans at 24–60% interest instead of 5–8% government loans
-
----
-
-## ✅ Our Solution
-
-**scheme-saathi** is a Telugu-first autonomous agent on Telegram that guides any small business owner from _"I don't know what I qualify for"_ to _"my application is submitted"_ — for free, without middlemen, without English.
-
-### How it works
-
-| Step | What happens |
-|------|-------------|
-| 1️⃣ Discovery | Owner types business type in Telugu → Agent shows matching schemes + total money available |
-| 2️⃣ Eligibility | Agent asks 3–4 simple questions → "High chance of approval" or "You need these 2 documents first" |
-| 3️⃣ Documents | Exact photo checklist + where to get each document (nearest MeeSeva, bank, DIC office) |
-| 4️⃣ Application | Step-by-step guidance → Status tracking → Resubmission help if rejected |
+- All information is in English on complex government portals
+- They don't know which schemes they qualify for
+- Document requirements are unclear
+- Middlemen charge ₹5,000–₹50,000 to "help" — and often cheat them
+- Result: they take private loans at 24–60% interest instead of 5–8% government loans
 
 ---
 
-## 💬 Example Conversation
+## What scheme-saathi does
+
+A user describes their business in Telugu. The bot asks a few short questions, shows which schemes they likely qualify for, explains exactly which documents to collect and where to get them, and tells them where to apply.
+
 ```
-User:   నేను టైలరింగ్ షాప్ నడుపుతున్నాను
-Bot:    మీకు 3 పథకాలు అర్హత ఉన్నాయి (మొత్తం ₹3,50,000):
-        1. PM Vishwakarma — ₹3,00,000
-        2. Mudra Loan (Shishu) — ₹50,000
-        3. TS-iPass Subsidy
-        ఏది మరింత తెలుసుకోవాలి?
+User:  నేను టైలరింగ్ షాప్ నడుపుతున్నాను
+Bot:   మీకు పథకాలు కనుగొనబడ్డాయి:
+       1. ✅ పీఎం విశ్వకర్మ యోజన — ₹3,00,000
+       2. ❓ రాజీవ్ యువ వికాసం — మరింత సమాచారం అవసరం
 
-User:   1
-Bot:    📄 PM Vishwakarma కోసం అవసరమైన documents:
-        ✅ Aadhaar card
-        ✅ Bank passbook మొదటి పేజీ photo
-        ✅ Caste certificate (MeeSeva లో తీయవచ్చు)
-        📍 Apply చేయడానికి: దగ్గర MeeSeva Center కి వెళ్ళండి — FREE
+User:  1
+Bot:   ✅ పీఎం విశ్వకర్మ యోజన
+       📝 సాంప్రదాయ కళాకారులకు నైపుణ్య శిక్షణ మరియు రుణ సహాయం.
+       💰 లాభం: ₹15,000 - ₹3,00,000
+       మీరు ఈ పథకానికి అర్హులు! ✅
+       📋 డాక్యుమెంట్ల కోసం, 'documents' టైప్ చేయండి.
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## How AI is used — and where it is not
+
+The LLM handles language. Deterministic code makes the decisions.
+
+| Layer | What runs there |
+|---|---|
+| Language understanding | LLM (Groq `llama-3.1-8b-instant`) — interprets Telugu, Hinglish, mixed input, free-text scheme questions |
+| Voice transcription | Groq Whisper — converts voice messages to text |
+| Eligibility decisions | `eligibility_engine.py` — pure Python, no LLM, no guessing |
+| Scheme data | `data/schemes.json` — verified structured data, not generated |
+| Document guidance | `skills/documents.py` — deterministic lookup, not generated |
+
+The LLM is never asked whether a user qualifies for a scheme. That decision is made by the eligibility engine using the scheme's actual rules. If information is missing, the engine returns `NEEDS_VERIFICATION` — it does not guess.
+
+---
+
+## Eligibility engine
+
+The core of the system is `eligibility_engine.py` — a standalone, independently testable module.
+
+**Input:** a `UserProfile` (gender, caste, age, GST status, bank account, and scheme-specific fields) plus a scheme dict.
+
+**Output:** an `EligibilityResult` with one of three statuses:
+
+| Status | Meaning |
+|---|---|
+| `LIKELY_ELIGIBLE` | All known requirements are satisfied |
+| `NEEDS_VERIFICATION` | A mandatory field hasn't been collected yet |
+| `LIKELY_NOT_ELIGIBLE` | At least one requirement is not met |
+
+`NEEDS_VERIFICATION` is the key design principle. Missing data is never silently treated as a pass or a fail. The engine uses an `UNKNOWN` sentinel that is distinct from `False`, `None`, and `0`.
+
+The engine returns structured reasons for every decision — which criteria passed, which failed, and which fields still need to be collected. The conversation layer renders these into Telugu.
+
+---
+
+## Architecture
+
+```
+User
+  ↓
+Telegram / Voice input
+  ↓
+telegram_bot.py
+  ├── Voice: Groq Whisper → text → state-aware normalizer
+  ├── TTS: gTTS → voice reply for prompt-style responses
+  └── Inline keyboards for guided input
+  ↓
+agent.py  (conversation state machine)
+  ├── LLM Q&A for free-text scheme questions (grounded in schemes.json)
+  └── Eligibility flow: collect profile → call engine → render result
+  ↓
+eligibility_engine.py  (pure function, no I/O, no LLM)
+  ↓
+data/schemes.json  (19 schemes, verified structure)
+  ↓
+skills/documents.py  (document checklists + where to get each)
+```
+
+---
+
+## Schemes database
+
+19 government schemes covering:
+
+- Central: PM Vishwakarma, Mudra Shishu/Kishor, PMEGP, PM SVANidhi, Stand Up India, CGTMSE
+- Telangana business: T-IDEA, T-PRIDE, WE-HUB, Dalit Bandhu, Rajiv Yuva Vikasam, PM Swarozgar (Auto/Taxi)
+- Telangana individual: Mahalakshmi, Rythu Bharosa, Gruha Jyothi, Indiramma Indlu, Rajiv Aarogyasri, Kalyana Lakshmi/Shaadi Mubarak
+
+Each scheme has: eligibility criteria (gender, caste, age, GST, bank account), benefit amount, required documents, application URL, offline application location, and helpline. Scheme-specific rules (land ownership, income limits, electricity usage) are encoded as `special_requirements` — no hardcoded scheme IDs in the engine.
+
+---
+
+## What the bot actually does today
+
+- Accepts Telugu, English, and Telugu-English mixed input
+- Accepts voice messages (transcribed via Whisper)
+- Guides users through a short profile questionnaire (gender, caste, age, GST, bank account)
+- Runs eligibility engine across all matching schemes
+- Shows ✅ for confirmed eligible, ❓ for schemes needing one more answer
+- Asks follow-up questions for ❓ schemes (land ownership, income, electricity units)
+- Shows document checklist with where to obtain each document
+- Sends TTS voice replies for all prompt-type responses
+- Handles Indian number formatting: `1,50,000` is accepted everywhere
+
+---
+
+## What it does not do yet
+
+- Application tracking after submission
+- Natural-language multi-field profile extraction (currently asks one question at a time)
+- Web UI
+- Scheme comparison view
+- Official verification dates on scheme data
+
+---
+
+## Tech stack
 
 | Component | Technology |
-|-----------|-----------|
-| Agent Framework | [nanobot](https://github.com/HKUDS/nanobot) |
-| Local LLM | gemma:2b via Ollama |
-| Interface | Telegram Bot |
+|---|---|
+| Interface | Telegram Bot (`python-telegram-bot`) |
+| LLM | Groq `llama-3.1-8b-instant` |
+| Voice transcription | Groq Whisper (`whisper-large-v3`) |
+| TTS | gTTS |
+| Eligibility engine | Pure Python (`eligibility_engine.py`) |
+| Scheme data | JSON (`data/schemes.json`) |
 | Language | Python 3.10+ |
-| Data | JSON (schemes database) |
-
-> Runs fully locally — no cloud dependency, no data leaves your machine.
 
 ---
 
-## 🚀 Quick Start
+## Quick start
+
 ```bash
-# 1. Clone the repo
+# 1. Clone
 git clone https://github.com/YOUR_USERNAME/scheme-saathi.git
 cd scheme-saathi
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Install and start Ollama with gemma:2b
-ollama pull gemma:2b
-ollama serve
-
-# 4. Configure your Telegram bot token
+# 3. Configure environment
 cp .env.example .env
-nano .env  # Add TELEGRAM_BOT_TOKEN, GROQ_API_KEY, ADMIN_USER_IDS
+# Edit .env and add:
+#   TELEGRAM_BOT_TOKEN — from @BotFather
+#   GROQ_API_KEY       — from console.groq.com
+#   ADMIN_USER_IDS     — your Telegram numeric user ID (optional)
 
-# 5. Start the agent
-nanobot gateway
+# 4. Start the bot
+python telegram_bot.py
 ```
-
-### Admin-only activity tracking
-
-- Usage activity is stored in JSONL at `ACTIVITY_LOG_PATH` (default: `data/activity_log.jsonl`)
-- Only Telegram user IDs listed in `ADMIN_USER_IDS` can view logs
-- Admin commands:
-        - `/activity` → recent users who used the bot
-        - `/stats` → total usage counters and event breakdown
 
 ---
 
-## 📁 Project Structure
+## Project structure
+
 ```
 scheme-saathi/
+├── agent.py                  # Conversation state machine
+├── eligibility_engine.py     # Deterministic eligibility engine
+├── telegram_bot.py           # Telegram interface + voice + TTS
+├── activity_logger.py        # Usage tracking (JSONL)
 ├── data/
-│   └── schemes.json          # Telangana schemes database
+│   ├── schemes.json          # 19 schemes database
+│   └── activity_log.jsonl    # Usage log (gitignored)
 ├── skills/
-│   ├── discover.py           # Scheme discovery logic
-│   ├── eligibility.py        # Eligibility checker
+│   ├── discover.py           # Keyword-based scheme discovery
 │   ├── documents.py          # Document guidance
-│   └── apply.py              # Application hand-holding
-├── .nanobot/
-│   └── config.json           # nanobot configuration
+│   └── eligibility.py        # (legacy, superseded by eligibility_engine.py)
+├── tests/
+│   ├── test_eligibility_engine.py   # 61 engine unit tests
+│   └── test_agent_conversation.py  # 20 conversation-layer tests
+├── build.md                  # Development log
+├── learnings.md              # Architecture lessons
+├── failures.md               # Real bugs and fixes
 ├── .env.example
-├── requirements.txt
-└── README.md
+└── requirements.txt
 ```
 
 ---
 
-## 🎯 Target Users
+## Running tests
+
+```bash
+pip install pytest
+python -m pytest tests/ -v
+```
+
+81 tests, all passing.
+
+---
+
+## Admin commands
+
+Activity is logged to `data/activity_log.jsonl` (usage metadata only — no message content).
+
+Telegram user IDs in `ADMIN_USER_IDS` can run:
+
+- `/activity` — recent users and usage counts
+- `/stats` — total events, unique users, event breakdown
+
+---
+
+## Target users
 
 - Kirana / grocery store owners
 - Tailors and clothing businesses
 - Vegetable and fruit vendors
 - Salon and beauty service providers
+- Auto-rickshaw and taxi drivers
 - Women entrepreneurs
-- SC/ST/Minority business owners
+- SC/ST/OBC/Minority business owners
 
-**Geographic focus:** Telangana (expandable to all Indian states)
-
----
-
-## 📊 Impact
-
-- Enable access to low-interest govt loans (saving 15–50% on interest)
-- Help businesses get subsidies for machinery and upgrades
-- Eliminate ₹5,000–₹50,000 middlemen fees
-- Increase government scheme utilization in Telangana
+Geographic focus: Telangana (scheme data is Telangana-specific; architecture is state-agnostic)
 
 ---
 
-## 👥 Team Dev3
-
-- Mukthanand
-- Tanvi
-- Charishma
----
-
-## 🏆 Hackathon
-
-Built at **Aarna Autonomous Agents Hackathon**
-📍 Mondee Tech, Madhapur, Hyderabad
-📅 March 14–15, 2026
+Improved for the **Razorpay Buildathon** — August 2026.
 
 ---
 
-## 📄 License
+## License
 
 MIT License — free to use, modify, and distribute.
