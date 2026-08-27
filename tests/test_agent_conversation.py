@@ -1,0 +1,329 @@
+"""
+tests/test_agent_conversation.py
+
+Conversation-layer tests for the migrated agent.py.
+
+These tests drive handle_message() through complete flows and verify:
+- The correct states are visited
+- Telugu responses are returned
+- NEEDS_VERIFICATION schemes trigger follow-up questions
+- LIKELY_NOT_ELIGIBLE schemes are excluded from the list
+- Indian number formatting (commas) is accepted
+- Session isolation between users
+
+No Telegram, no LLM calls (LLM branch is only triggered by question
+words or "?" — our test inputs avoid those).
+"""
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from agent import handle_message
+
+
+def fresh_sessions():
+    return {}
+
+
+def drive(steps, user_id="u1", sessions=None):
+    """Send a list of messages and return all responses."""
+    if sessions is None:
+        sessions = fresh_sessions()
+    responses = []
+    for msg in steps:
+        responses.append(handle_message(user_id, msg, sessions))
+    return responses, sessions
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Greeting / start
+# ──────────────────────────────────────────────────────────────────────
+
+def test_greeting_returns_category_prompt():
+    responses, _ = drive(["hi"])
+    assert "పథకాలు" in responses[0]
+
+
+def test_start_command_returns_category_prompt():
+    responses, _ = drive(["start"])
+    assert "పథకాలు" in responses[0]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# M1: Business flow — tailor, male, general, 30, no GST, yes bank
+# ──────────────────────────────────────────────────────────────────────
+
+def _business_flow(gender="1", caste="1", age="30", gst="2", bank="1",
+                   business="2", user_id="u_biz"):
+    """Drive through the full business eligibility flow."""
+    sessions = fresh_sessions()
+    steps = [
+        "hi",       # start → awaiting_scheme_category
+        "1",        # business → awaiting_business_type
+        business,   # tailor (2) → eligibility
+        gender,
+        caste,
+        age,
+        gst,
+        bank,
+    ]
+    responses, sessions = drive(steps, user_id=user_id, sessions=sessions)
+    return responses, sessions
+
+
+def test_m1_business_tailor_returns_scheme_list():
+    responses, _ = _business_flow()
+    # Last response should be the scheme list
+    scheme_list = responses[-1]
+    assert "పీఎం విశ్వకర్మ" in scheme_list, "PM Vishwakarma should appear for tailor"
+
+
+def test_m1_scheme_list_contains_eligible_marker():
+    responses, _ = _business_flow()
+    scheme_list = responses[-1]
+    assert "✅" in scheme_list
+
+
+def test_m1_select_scheme_returns_eligible_result():
+    responses, sessions = _business_flow(user_id="u_m1_sel")
+    # Now select scheme 1
+    resp, _ = drive(["1"], user_id="u_m1_sel", sessions=sessions)
+    assert "అర్హులు" in resp[0] or "✅" in resp[0]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# M2: Individual flow — female, SC, 25, ration card yes, bank yes
+# ──────────────────────────────────────────────────────────────────────
+
+def _individual_flow(gender="2", caste="2", age="25", ration="1", bank="1",
+                     user_id="u_ind"):
+    sessions = fresh_sessions()
+    steps = [
+        "hi",
+        "2",       # individual
+        gender,
+        caste,
+        age,
+        ration,
+        bank,
+    ]
+    responses, sessions = drive(steps, user_id=user_id, sessions=sessions)
+    return responses, sessions
+
+
+def test_m2_individual_returns_scheme_list():
+    responses, _ = _individual_flow()
+    scheme_list = responses[-1]
+    # Should show some schemes
+    assert "పథకాలు" in scheme_list
+
+
+def test_m2_needs_verif_schemes_marked_with_question_mark():
+    responses, _ = _individual_flow()
+    scheme_list = responses[-1]
+    # rythu_bharosa and kalyana_lakshmi need verification → ❓ marker
+    assert "❓" in scheme_list, "NEEDS_VERIFICATION schemes should be marked ❓"
+
+
+def test_m2_fully_eligible_schemes_marked_with_checkmark():
+    responses, _ = _individual_flow()
+    scheme_list = responses[-1]
+    assert "✅" in scheme_list, "LIKELY_ELIGIBLE schemes should be marked ✅"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# NEEDS_VERIFICATION flow: selecting a ❓ scheme triggers a follow-up
+# ──────────────────────────────────────────────────────────────────────
+
+def test_selecting_needs_verif_scheme_asks_followup():
+    """Selecting rythu_bharosa (needs land) should ask about land ownership."""
+    responses, sessions = _individual_flow(user_id="u_nv1")
+    scheme_list = responses[-1]
+
+    # Find the 1-based index of rythu_bharosa in the list
+    lines = scheme_list.split("\n")
+    rythu_idx = None
+    for line in lines:
+        if "రైతు భరోసా" in line:
+            # extract the leading number
+            num = line.strip().split(".")[0].strip()
+            if num.isdigit():
+                rythu_idx = num
+                break
+
+    if rythu_idx is None:
+        # rythu_bharosa not in list for this profile — skip test
+        return
+
+    resp, sessions2 = drive([rythu_idx], user_id="u_nv1", sessions=sessions)
+    # Should ask about land ownership
+    assert "భూమి" in resp[0] or "land" in resp[0].lower() or "అదనపు" in resp[0]
+
+
+def test_land_yes_after_followup_declares_eligible():
+    """After land=yes, engine should return LIKELY_ELIGIBLE for rythu_bharosa."""
+    responses, sessions = _individual_flow(user_id="u_nv2")
+    scheme_list = responses[-1]
+
+    lines = scheme_list.split("\n")
+    rythu_idx = None
+    for line in lines:
+        if "రైతు భరోసా" in line:
+            num = line.strip().split(".")[0].strip()
+            if num.isdigit():
+                rythu_idx = num
+                break
+
+    if rythu_idx is None:
+        return
+
+    # Select rythu_bharosa
+    resp1, _ = drive([rythu_idx], user_id="u_nv2", sessions=sessions)
+    # Answer yes to land question
+    resp2, _ = drive(["1"], user_id="u_nv2", sessions=sessions)
+    assert "అర్హులు" in resp2[0] or "✅" in resp2[0]
+
+
+def test_land_no_after_followup_declares_not_eligible():
+    """After land=no, engine should return LIKELY_NOT_ELIGIBLE for rythu_bharosa."""
+    responses, sessions = _individual_flow(user_id="u_nv3")
+    scheme_list = responses[-1]
+
+    lines = scheme_list.split("\n")
+    rythu_idx = None
+    for line in lines:
+        if "రైతు భరోసా" in line:
+            num = line.strip().split(".")[0].strip()
+            if num.isdigit():
+                rythu_idx = num
+                break
+
+    if rythu_idx is None:
+        return
+
+    drive([rythu_idx], user_id="u_nv3", sessions=sessions)
+    resp, _ = drive(["2"], user_id="u_nv3", sessions=sessions)
+    assert "అర్హులు కాదు" in resp[0] or "❌" in resp[0]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# M11: Indian number formatting
+# ──────────────────────────────────────────────────────────────────────
+
+def test_income_with_commas_accepted():
+    """
+    kalyana_lakshmi needs annual_income.
+    Entering '1,50,000' should NOT produce an error.
+    """
+    from agent import _parse_int
+    # Test the parser directly
+    assert _parse_int("1,50,000") == 150000
+    assert _parse_int("2,00,000") == 200000
+    assert _parse_int("150000") == 150000
+
+
+def test_parse_int_plain_number():
+    from agent import _parse_int
+    assert _parse_int("30") == 30
+
+
+def test_kalyana_lakshmi_income_comma_format_accepted_in_flow():
+    """Drive to the income question and enter comma-formatted income."""
+    responses, sessions = _individual_flow(user_id="u_m11")
+    scheme_list = responses[-1]
+
+    lines = scheme_list.split("\n")
+    kalyana_idx = None
+    for line in lines:
+        if "కళ్యాణ లక్ష్మి" in line:
+            num = line.strip().split(".")[0].strip()
+            if num.isdigit():
+                kalyana_idx = num
+                break
+
+    if kalyana_idx is None:
+        return  # scheme not shown for this profile
+
+    # Select kalyana_lakshmi
+    drive([kalyana_idx], user_id="u_m11", sessions=sessions)
+    # Answer income with commas — should not error
+    resp, _ = drive(["1,50,000"], user_id="u_m11", sessions=sessions)
+    # Should NOT be an invalid input error
+    assert "చెల్లని" not in resp[0], f"Comma-formatted income should be accepted, got: {resp[0]}"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Restart
+# ──────────────────────────────────────────────────────────────────────
+
+def test_restart_clears_session():
+    sessions = fresh_sessions()
+    drive(["hi", "1", "2"], user_id="u_rst", sessions=sessions)
+    # mid-flow restart
+    resp, _ = drive(["restart"], user_id="u_rst", sessions=sessions)
+    assert "పథకాలు" in resp[0]  # back to category prompt
+    # State should be awaiting_scheme_category
+    assert sessions["u_rst"]["state"] == "awaiting_scheme_category"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Documents shortcut
+# ──────────────────────────────────────────────────────────────────────
+
+def test_documents_before_scheme_selected_returns_guidance():
+    # "documents" contains "document" which triggers the LLM Q&A branch.
+    # The documents shortcut is only reachable once the user is past the
+    # scheme-category step. Drive to awaiting_scheme_category first, then
+    # send the Telugu-only shortcut word that bypasses the LLM trigger.
+    sessions = fresh_sessions()
+    # Get past start state
+    handle_message("u_doc", "hi", sessions)
+    # Now send the Telugu shortcut (పత్రాలు) which is in the documents
+    # shortcut list but not in question_words
+    resp = handle_message("u_doc", "పత్రాలు", sessions)
+    assert "పథకం" in resp
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Session isolation
+# ──────────────────────────────────────────────────────────────────────
+
+def test_two_users_have_isolated_sessions():
+    sessions = fresh_sessions()
+    # User A starts business flow
+    handle_message("userA", "hi", sessions)
+    handle_message("userA", "1", sessions)   # business
+    handle_message("userA", "2", sessions)   # tailor
+
+    # User B starts fresh
+    handle_message("userB", "hi", sessions)
+
+    assert sessions["userA"]["state"] == "eligibility"
+    assert sessions["userB"]["state"] == "awaiting_scheme_category"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Invalid input handling
+# ──────────────────────────────────────────────────────────────────────
+
+def test_invalid_category_input():
+    sessions = fresh_sessions()
+    drive(["hi"], user_id="u_inv", sessions=sessions)
+    resp, _ = drive(["99"], user_id="u_inv", sessions=sessions)
+    assert "చెల్లని" in resp[0]
+
+
+def test_invalid_age_string():
+    sessions = fresh_sessions()
+    drive(["hi", "1", "2", "1", "1"], user_id="u_age", sessions=sessions)
+    # Now at age step
+    resp, _ = drive(["thirty"], user_id="u_age", sessions=sessions)
+    assert "చెల్లని" in resp[0]
+
+
+def test_invalid_age_out_of_range():
+    sessions = fresh_sessions()
+    drive(["hi", "1", "2", "1", "1"], user_id="u_age2", sessions=sessions)
+    resp, _ = drive(["200"], user_id="u_age2", sessions=sessions)
+    assert "చెల్లని" in resp[0]

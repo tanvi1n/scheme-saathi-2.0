@@ -429,8 +429,7 @@
       "age_min": 18,
       "age_max": 45,
       "gst_required": false,
-      "bank_account_required": true,
-      "max_annual_turnover": 200000
+      "bank_account_required": true
     },
     "benefit_type": "loan, subsidy",
     "amount_min": 100000,
@@ -452,7 +451,16 @@
       "Backward Classes",
       "Subsidized Loan"
     ],
-    "telugu_description": "వెనుకబడిన మరియు మైనారిటీ సంఘాల నుండి నిరుద్యోగ యువతకు స్వయం ఉపాధి పథకం."
+    "telugu_description": "వెనుకబడిన మరియు మైనారిటీ సంఘాల నుండి నిరుద్యోగ యువతకు స్వయం ఉపాధి పథకం.",
+    "special_requirements": [
+      {
+        "field": "annual_turnover",
+        "type": "max_value",
+        "max": 200000,
+        "label": "annual_turnover",
+        "failure_reason": "Annual turnover must be <= 200000 for this scheme"
+      }
+    ]
   },
   {
     "id": "cgtmse",
@@ -555,8 +563,7 @@
       "age_min": 18,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": true,
-      "white_ration_card": true
+      "bank_account_required": true
     },
     "benefit_type": "grant",
     "amount_min": 2500,
@@ -577,7 +584,15 @@
       "Monthly Income",
       "Free Travel"
     ],
-    "telugu_description": "మహిళలకు నెలవారీ ₹2,500 ఆర్థిక సహాయం మరియు TSRTC బస్సుల్లో ఉచిత ప్రయాణం."
+    "telugu_description": "మహిళలకు నెలవారీ ₹2,500 ఆర్థిక సహాయం మరియు TSRTC బస్సుల్లో ఉచిత ప్రయాణం.",
+    "special_requirements": [
+      {
+        "field": "white_ration_card",
+        "type": "boolean_required",
+        "label": "white_ration_card",
+        "failure_reason": "White ration card required for this scheme"
+      }
+    ]
   },
   {
     "id": "rythu_bharosa",
@@ -595,8 +610,7 @@
       "age_min": 18,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": true,
-      "land_ownership": "required"
+      "bank_account_required": true
     },
     "benefit_type": "grant",
     "amount_min": 12000,
@@ -617,7 +631,15 @@
       "Farmer Support",
       "Annual Grant"
     ],
-    "telugu_description": "రైతులకు పెట్టుబడి మద్దతు మరియు కౌలు రైతులు మరియు కూలీలకు ఆర్థిక సహాయం."
+    "telugu_description": "రైతులకు పెట్టుబడి మద్దతు మరియు కౌలు రైతులు మరియు కూలీలకు ఆర్థిక సహాయం.",
+    "special_requirements": [
+      {
+        "field": "land_ownership",
+        "type": "boolean_required",
+        "label": "land_ownership",
+        "failure_reason": "Land ownership required for this scheme"
+      }
+    ]
   },
   {
     "id": "gruha_jyothi",
@@ -634,8 +656,7 @@
       "age_min": 18,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": false,
-      "max_units_usage": 200
+      "bank_account_required": false
     },
     "benefit_type": "subsidy",
     "amount_min": 0,
@@ -656,7 +677,16 @@
       "Household",
       "Subsidy"
     ],
-    "telugu_description": "గృహాలకు నెలకు 200 యూనిట్ల వరకు ఉచిత విద్యుత్ సరఫరా."
+    "telugu_description": "గృహాలకు నెలకు 200 యూనిట్ల వరకు ఉచిత విద్యుత్ సరఫరా.",
+    "special_requirements": [
+      {
+        "field": "monthly_units",
+        "type": "max_value",
+        "max": 200,
+        "label": "monthly_units",
+        "failure_reason": "Monthly electricity usage must be <= 200 units"
+      }
+    ]
   },
   {
     "id": "indiramma_indlu",
@@ -673,8 +703,7 @@
       "age_min": 18,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": true,
-      "white_ration_card": true
+      "bank_account_required": true
     },
     "benefit_type": "grant",
     "amount_min": 500000,
@@ -696,7 +725,15 @@
       "Construction",
       "Financial Aid"
     ],
-    "telugu_description": "నిరాశ్రయులైన కుటుంబాలకు స్వంత స్థలాల్లో ఇళ్లు నిర్మించడానికి ₹5 లక్షల ఆర్థిక సహాయం."
+    "telugu_description": "నిరాశ్రయులైన కుటుంబాలకు స్వంత స్థలాల్లో ఇళ్లు నిర్మించడానికి ₹5 లక్షల ఆర్థిక సహాయం.",
+    "special_requirements": [
+      {
+        "field": "white_ration_card",
+        "type": "boolean_required",
+        "label": "white_ration_card",
+        "failure_reason": "White ration card required for this scheme"
+      }
+    ]
   },
   {
     "id": "rajiv_aarogyasri",
@@ -713,8 +750,7 @@
       "age_min": 0,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": false,
-      "white_ration_card": true
+      "bank_account_required": false
     },
     "benefit_type": "insurance",
     "amount_min": 0,
@@ -735,7 +771,15 @@
       "Insurance",
       "Emergency"
     ],
-    "telugu_description": "ప్రధాన వ్యాధులకు కుటుంబానికి ₹10 లక్షల వరకు ఆరోగ్య బీమా కవరేజీ."
+    "telugu_description": "ప్రధాన వ్యాధులకు కుటుంబానికి ₹10 లక్షల వరకు ఆరోగ్య బీమా కవరేజీ.",
+    "special_requirements": [
+      {
+        "field": "white_ration_card",
+        "type": "boolean_required",
+        "label": "white_ration_card",
+        "failure_reason": "White ration card required for this scheme"
+      }
+    ]
   },
   {
     "id": "kalyana_lakshmi",
@@ -752,8 +796,7 @@
       "age_min": 18,
       "age_max": null,
       "gst_required": false,
-      "bank_account_required": true,
-      "max_annual_income": 200000
+      "bank_account_required": true
     },
     "benefit_type": "grant",
     "amount_min": 100116,
@@ -776,6 +819,15 @@
       "Social Welfare",
       "Women Support"
     ],
-    "telugu_description": "BPL కుటుంబాల నుండి అమ్మాయిల వివాహానికి ఆర్థిక సహాయం."
+    "telugu_description": "BPL కుటుంబాల నుండి అమ్మాయిల వివాహానికి ఆర్థిక సహాయం.",
+    "special_requirements": [
+      {
+        "field": "annual_income",
+        "type": "max_value",
+        "max": 200000,
+        "label": "annual_income",
+        "failure_reason": "Annual income must be <= 200000 for this scheme"
+      }
+    ]
   }
 ]
