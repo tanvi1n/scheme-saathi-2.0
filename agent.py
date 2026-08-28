@@ -13,6 +13,28 @@ from eligibility_engine import (
     check_scheme_eligibility,
 )
 
+# ──────────────────────────────────────────────────────────────────────
+# Deterministic discovery: canonical occupation → normalized categories
+# ──────────────────────────────────────────────────────────────────────
+
+# Controlled category vocabulary:
+#   service, retail, artisan, micro_enterprise, manufacturing,
+#   transport, agriculture, startup, women_led, vendor
+
+occupation_to_categories: dict = {
+    "tailor":           ["artisan", "service", "micro_enterprise"],
+    "kirana":           ["retail", "micro_enterprise"],
+    "salon":            ["service", "micro_enterprise", "artisan"],
+    "vegetable_vendor": ["vendor", "retail"],
+    "mechanic":         ["service", "micro_enterprise"],
+    "carpenter":        ["artisan", "service", "micro_enterprise"],
+    "auto_driver":      ["transport"],
+    "taxi_driver":      ["transport"],
+    "street_vendor":    ["vendor"],
+    "dairy_business":   ["manufacturing", "micro_enterprise", "retail"],
+    "small_manufacturer": ["manufacturing", "micro_enterprise"],
+}
+
 load_dotenv()
 
 # List of greeting words to detect
@@ -214,21 +236,49 @@ User Question:
 
 def _filter_business_schemes(business_type: str, profile: UserProfile, all_schemes: list) -> tuple:
     """
-    Filter business schemes by keyword match then eligibility engine.
+    Filter business schemes by occupation → normalized category match,
+    then run each candidate through the eligibility engine.
+
+    Discovery strategy (in order):
+    1. Look up the canonical occupation in occupation_to_categories.
+       If found, match any scheme whose normalized_categories intersects
+       the occupation's category set.
+    2. Fallback: if the occupation is not in occupation_to_categories,
+       use the legacy keyword_map substring match against target_business_types.
+       This preserves existing behaviour for unrecognised occupations.
+
+    In both cases, every candidate is then passed to check_scheme_eligibility.
+    Discovery produces CANDIDATES — the engine determines eligibility.
 
     Returns (eligible_list, needs_verif_list) where each item is a scheme dict.
     LIKELY_NOT_ELIGIBLE schemes are discarded.
     """
     business_type_lower = business_type.lower()
-    variants = keyword_map.get(business_type_lower, [business_type_lower])
 
     eligible = []
     needs_verif = []
 
+    # ── Strategy 1: normalized category match ─────────────────────────
+    categories = occupation_to_categories.get(business_type_lower)
+    if categories:
+        category_set = set(categories)
+        for scheme in all_schemes:
+            if "target_business_types" not in scheme:
+                continue
+            scheme_cats = set(scheme.get("normalized_categories", []))
+            if not scheme_cats.isdisjoint(category_set):
+                result = check_scheme_eligibility(profile, scheme)
+                if result.status == EligibilityStatus.LIKELY_ELIGIBLE:
+                    eligible.append(scheme)
+                elif result.status == EligibilityStatus.NEEDS_VERIFICATION:
+                    needs_verif.append(scheme)
+        return eligible, needs_verif
+
+    # ── Strategy 2: legacy keyword fallback ───────────────────────────
+    variants = keyword_map.get(business_type_lower, [business_type_lower])
     for scheme in all_schemes:
         if "target_business_types" not in scheme:
             continue
-        # Keyword match (unchanged from original)
         target_types = [bt.lower() for bt in scheme.get("target_business_types", [])]
         business_match = any(
             variant in target or target in variant
@@ -237,13 +287,11 @@ def _filter_business_schemes(business_type: str, profile: UserProfile, all_schem
         )
         if not business_match:
             continue
-
         result = check_scheme_eligibility(profile, scheme)
         if result.status == EligibilityStatus.LIKELY_ELIGIBLE:
             eligible.append(scheme)
         elif result.status == EligibilityStatus.NEEDS_VERIFICATION:
             needs_verif.append(scheme)
-        # LIKELY_NOT_ELIGIBLE → silently excluded from list
 
     return eligible, needs_verif
 

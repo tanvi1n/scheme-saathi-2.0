@@ -42,7 +42,12 @@
       "Skill Development",
       "Low Interest"
     ],
-    "telugu_description": "సాంప్రదాయ కళాకారులు మరియు హస్తకళాకారులకు నైపుణ్య శిక్షణ, సాధన మంజూరు మరియు రుణ సహాయం."
+    "telugu_description": "సాంప్రదాయ కళాకారులు మరియు హస్తకళాకారులకు నైపుణ్య శిక్షణ, సాధన మంజూరు మరియు రుణ సహాయం.",
+    "normalized_categories": [
+      "artisan",
+      "service",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "mudra_shishu",
@@ -84,7 +89,13 @@
       "Startup",
       "No Collateral"
     ],
-    "telugu_description": "చిన్న వ్యాపారాలు మరియు స్టార్టప్‌లకు ఆర్థిక సహాయం."
+    "telugu_description": "చిన్న వ్యాపారాలు మరియు స్టార్టప్‌లకు ఆర్థిక సహాయం.",
+    "normalized_categories": [
+      "micro_enterprise",
+      "retail",
+      "service",
+      "vendor"
+    ]
   },
   {
     "id": "mudra_kishor",
@@ -124,7 +135,13 @@
       "Business Expansion",
       "Working Capital"
     ],
-    "telugu_description": "స్థాపించబడిన చిన్న వ్యాపారాలు విస్తరించడానికి లేదా పరికరాలు కొనుగోలు చేయడానికి రుణం."
+    "telugu_description": "స్థాపించబడిన చిన్న వ్యాపారాలు విస్తరించడానికి లేదా పరికరాలు కొనుగోలు చేయడానికి రుణం.",
+    "normalized_categories": [
+      "micro_enterprise",
+      "manufacturing",
+      "retail",
+      "service"
+    ]
   },
   {
     "id": "pmegp",
@@ -165,7 +182,13 @@
       "New Enterprise",
       "Government Subsidy"
     ],
-    "telugu_description": "తయారీ మరియు సేవలలో కొత్త సూక్ష్మ సంస్థలను స్థాపించడానికి రుణ-అనుసంధాన సబ్సిడీ పథకం."
+    "telugu_description": "తయారీ మరియు సేవలలో కొత్త సూక్ష్మ సంస్థలను స్థాపించడానికి రుణ-అనుసంధాన సబ్సిడీ పథకం.",
+    "normalized_categories": [
+      "manufacturing",
+      "service",
+      "agriculture",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "pm_svanidhi",
@@ -205,7 +228,10 @@
       "Urban",
       "Small Loan"
     ],
-    "telugu_description": "వీధి వ్యాపారులకు జీవనోపాధిని పునఃప్రారంభించడానికి తాకట్టు రహిత వర్కింగ్ క్యాపిటల్ రుణాలు."
+    "telugu_description": "వీధి వ్యాపారులకు జీవనోపాధిని పునఃప్రారంభించడానికి తాకట్టు రహిత వర్కింగ్ క్యాపిటల్ రుణాలు.",
+    "normalized_categories": [
+      "vendor"
+    ]
   },
   {
     "id": "stand_up_india",
@@ -247,7 +273,13 @@
       "SC/ST",
       "Large Capital"
     ],
-    "telugu_description": "SC/ST మరియు మహిళా వ్యవసాయదారులకు కొత్త సంస్థలను స్థాపించడానికి రుణాలు."
+    "telugu_description": "SC/ST మరియు మహిళా వ్యవసాయదారులకు కొత్త సంస్థలను స్థాపించడానికి రుణాలు.",
+    "normalized_categories": [
+      "manufacturing",
+      "service",
+      "retail",
+      "startup"
+    ]
   },
   {
     "id": "t_idea",
@@ -287,7 +319,11 @@
       "Manufacturing",
       "Power Reimbursement"
     ],
-    "telugu_description": "తెలంగాణలో MSMEలకు పెట్టుబడి సబ్సిడీలు మరియు విద్యుత్ ఖర్చు రీయింబర్స్‌మెంట్‌లు అందించే ప్రోత్సాహక పథకం."
+    "telugu_description": "తెలంగాణలో MSMEలకు పెట్టుబడి సబ్సిడీలు మరియు విద్యుత్ ఖర్చు రీయింబర్స్‌మెంట్‌లు అందించే ప్రోత్సాహక పథకం.",
+    "normalized_categories": [
+      "manufacturing",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "t_pride",
@@ -328,7 +364,12 @@
       "High Subsidy",
       "Telangana State"
     ],
-    "telugu_description": "SC/ST మరియు వికలాంగ వ్యవసాయదారులకు అధిక మూలధన సబ్సిడీలతో సహా లక్ష్య ప్రోత్సాహకాలు."
+    "telugu_description": "SC/ST మరియు వికలాంగ వ్యవసాయదారులకు అధిక మూలధన సబ్సిడీలతో సహా లక్ష్య ప్రోత్సాహకాలు.",
+    "normalized_categories": [
+      "manufacturing",
+      "service",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "we_hub",
@@ -368,7 +409,12 @@
       "Incubation",
       "Mentorship"
     ],
-    "telugu_description": "మహిళల నేతృత్వంలోని స్టార్టప్‌లు మరియు సూక్ష్మ సంస్థలకు ఇంక్యుబేషన్ మరియు ఆర్థిక అనుసంధాన మద్దతు."
+    "telugu_description": "మహిళల నేతృత్వంలోని స్టార్టప్‌లు మరియు సూక్ష్మ సంస్థలకు ఇంక్యుబేషన్ మరియు ఆర్థిక అనుసంధాన మద్దతు.",
+    "normalized_categories": [
+      "startup",
+      "micro_enterprise",
+      "women_led"
+    ]
   },
   {
     "id": "dalit_bandhu",
@@ -411,7 +457,13 @@
       "Full Funding",
       "Telangana Govt"
     ],
-    "telugu_description": "SC కుటుంబాలకు వ్యాపారం ప్రారంభించడానికి బ్యాంకు అనుసంధానం లేదా తిరిగి చెల్లింపు లేకుండా ప్రత్యక్ష ఆర్థిక సహాయం."
+    "telugu_description": "SC కుటుంబాలకు వ్యాపారం ప్రారంభించడానికి బ్యాంకు అనుసంధానం లేదా తిరిగి చెల్లింపు లేకుండా ప్రత్యక్ష ఆర్థిక సహాయం.",
+    "normalized_categories": [
+      "retail",
+      "transport",
+      "manufacturing",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "rajiv_yuva_vikasam",
@@ -460,6 +512,11 @@
         "label": "annual_turnover",
         "failure_reason": "Annual turnover must be <= 200000 for this scheme"
       }
+    ],
+    "normalized_categories": [
+      "service",
+      "retail",
+      "micro_enterprise"
     ]
   },
   {
@@ -501,7 +558,13 @@
       "Large Loan",
       "Central Government"
     ],
-    "telugu_description": "MSMEలకు గ్యారెంటీ ట్రస్ట్ ద్వారా అందించబడే తాకట్టు రహిత రుణ సౌకర్యం."
+    "telugu_description": "MSMEలకు గ్యారెంటీ ట్రస్ట్ ద్వారా అందించబడే తాకట్టు రహిత రుణ సౌకర్యం.",
+    "normalized_categories": [
+      "manufacturing",
+      "service",
+      "retail",
+      "micro_enterprise"
+    ]
   },
   {
     "id": "pm_swarozgar_transport",
@@ -546,7 +609,10 @@
       "Vehicle Loan",
       "Subsidy"
     ],
-    "telugu_description": "స్వయం ఉపాధి కోసం ఆటో-రిక్షాలు, టాక్సీలు మరియు ఇతర వాణిజ్య వాహనాలను కొనుగోలు చేయడానికి ఆర్థిక సహాయం."
+    "telugu_description": "స్వయం ఉపాధి కోసం ఆటో-రిక్షాలు, టాక్సీలు మరియు ఇతర వాణిజ్య వాహనాలను కొనుగోలు చేయడానికి ఆర్థిక సహాయం.",
+    "normalized_categories": [
+      "transport"
+    ]
   },
   {
     "id": "mahalakshmi_scheme",

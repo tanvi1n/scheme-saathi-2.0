@@ -103,4 +103,23 @@ Pending. Users are shown an inflated list that includes schemes they may not qua
 **What we learned:**  
 The two-stage design (filter → then scheme-specific checks) creates a misleading intermediate state. A user who sees 6 "matched" schemes may feel confident, then get rejected on 2 of them after answering more questions. Either the filter needs to be smarter, or the UI needs to make clear that the list is preliminary — not confirmed eligibility.
 
+### F6 — Transient httpx.ConnectTimeout on first Telegram response (2026-08-28)
+
+**What happened:**
+During the first live smoke test after the eligibility-engine migration, the bot started successfully and began polling. When a `/start` message was sent from a real Telegram client, the bot's first attempt to send the reply timed out with `httpx.ConnectTimeout` while communicating with `api.telegram.org:443`.
+
+**What we verified:**
+- TCP connectivity to `api.telegram.org:443` was verified successfully — the network path was reachable
+- The failure was on the outbound API call from the bot, not on inbound polling
+- Retrying the bot succeeded — the `/start` interaction completed normally on the next attempt
+- No source-code change was required to resolve it
+
+**Root cause:**
+Not established. The timeout was transient. Possible contributing factors include: transient network latency, Telegram API response delay, or httpx connection pool cold-start. We did not investigate further because a retry resolved it.
+
+**Status:** Resolved by retry. No code change. Monitoring for recurrence.
+
+**What we learned:**
+See L19 — startup health and external API health are independent. A single transient timeout on first contact is not sufficient reason to diagnose a code problem. The correct response is: verify connectivity, retry, and only investigate further if the failure is reproducible.
+
 <!-- New failures go here as they are discovered -->

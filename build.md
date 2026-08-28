@@ -199,4 +199,133 @@ The baseline tests confirmed that eligibility logic was duplicated across `agent
 
 **Old agent.py eligibility logic:** fully removed. The `skills/eligibility.py` module still exists on disk (dead code) but is no longer imported.
 
+### 2026-08-28 — Session 5: Telegram Smoke Test (Post-Migration)
+
+**What we did:**
+- Launched the migrated bot (`telegram_bot.py`) for the first time after the eligibility-engine migration
+- Verified bot startup completed successfully — all imports resolved, session state initialised, Telegram polling started
+- Sent a real `/start` message from a Telegram client and observed the full interaction
+- Confirmed 81/81 automated tests remain passing (no regression from the migration)
+
+**Outcome:**
+- Bot startup: ✅ successful
+- `/start` interaction: ✅ successful after retry (see Failures — F6)
+- Test suite: ✅ 81/81 passing
+- No source-code changes required
+
+**Current status:** Bot is running end-to-end on Telegram. All automated tests pass. Ready to continue feature development.
+
+### 2026-08-28 — Session 6: Normalized Discovery Model
+
+**Why introduced:**
+
+The baseline tests (Session 2) revealed that a tailor matched only PM Vishwakarma — because the keyword map only connected "tailor" to schemes whose `target_business_types` literally contained the word "tailor", "tailors", "clothing", or "garment". Mudra Shishu, PMEGP, CGTMSE, and several others are clearly relevant to a tailor but were never surfaced. The old model was: *word in scheme data* → match. It was fragile, English-biased, and required manually expanding keyword lists forever.
+
+**Design choice made:**
+
+Hybrid Discovery: canonical occupation → normalized categories → candidate schemes whose categories intersect.
+
+LLM occupation classification was deliberately deferred. This session implements the deterministic data model only.
+
+---
+
+**What was built:**
+
+**`data/schemes.json` — `normalized_categories` field added to all 13 business schemes:**
+
+| Scheme | Categories |
+|---|---|
+| pm_vishwakarma | artisan, service, micro_enterprise |
+| mudra_shishu | micro_enterprise, retail, service, vendor |
+| mudra_kishor | micro_enterprise, manufacturing, retail, service |
+| pmegp | manufacturing, service, agriculture, micro_enterprise |
+| pm_svanidhi | vendor |
+| stand_up_india | manufacturing, service, retail, startup |
+| t_idea | manufacturing, micro_enterprise |
+| t_pride | manufacturing, service, micro_enterprise |
+| we_hub | startup, micro_enterprise, women_led |
+| dalit_bandhu | retail, transport, manufacturing, micro_enterprise |
+| rajiv_yuva_vikasam | service, retail, micro_enterprise |
+| cgtmse | manufacturing, service, retail, micro_enterprise |
+| pm_swarozgar_transport | transport |
+
+The 6 individual schemes (`mahalakshmi_scheme`, `rythu_bharosa`, `gruha_jyothi`, `indiramma_indlu`, `rajiv_aarogyasri`, `kalyana_lakshmi`) received no `normalized_categories` — they have no `target_business_types` and are not matched by occupation.
+
+**Controlled category vocabulary** (10 categories):
+`service`, `retail`, `artisan`, `micro_enterprise`, `manufacturing`, `transport`, `agriculture`, `startup`, `women_led`, `vendor`
+
+No categories invented outside this set. The test suite enforces this constraint.
+
+---
+
+**`skills/discover.py` — `occupation_to_categories` mapping added:**
+
+| Occupation | Categories |
+|---|---|
+| tailor | artisan, service, micro_enterprise |
+| kirana | retail, micro_enterprise |
+| salon | service, micro_enterprise, artisan |
+| vegetable_vendor | vendor, retail |
+| mechanic | service, micro_enterprise |
+| carpenter | artisan, service, micro_enterprise |
+| auto_driver | transport |
+| taxi_driver | transport |
+| street_vendor | vendor |
+| dairy_business | manufacturing, micro_enterprise, retail |
+| small_manufacturer | manufacturing, micro_enterprise |
+
+New public function `get_candidate_schemes(business_type, all_schemes)`:
+- Strategy 1: if `business_type` is in `occupation_to_categories`, return all schemes whose `normalized_categories` intersects the occupation's category set
+- Strategy 2: if not recognised, fall back to legacy `keyword_map` substring matching against `target_business_types`
+- Returns scheme dicts (DISCOVERY ONLY — does not call the eligibility engine)
+
+`discover_schemes()` updated to call `get_candidate_schemes()` instead of inlining keyword logic.
+
+---
+
+**`agent.py` — `_filter_business_schemes()` updated:**
+
+Same two-strategy pattern as `skills/discover.py`. All candidates still passed through `check_scheme_eligibility()` — discovery produces candidates, the engine determines eligibility. No change to the eligibility engine.
+
+---
+
+**Discovery behavior before vs after:**
+
+| Occupation | Old model (keyword) | New model (category) |
+|---|---|---|
+| tailor | pm_vishwakarma only | pm_vishwakarma, mudra_shishu, mudra_kishor, pmegp, stand_up_india, t_idea, t_pride, we_hub, dalit_bandhu, rajiv_yuva_vikasam, cgtmse |
+| kirana | partial — depended on target_business_types text | mudra_shishu, mudra_kishor, stand_up_india, dalit_bandhu, rajiv_yuva_vikasam, cgtmse |
+| mechanic | no matches (not in keyword_map) | mudra_shishu, mudra_kishor, pmegp, stand_up_india, t_pride, rajiv_yuva_vikasam, cgtmse |
+| auto_driver | partial | dalit_bandhu, pm_swarozgar_transport |
+| street_vendor | partial | pm_svanidhi, mudra_shishu |
+| unknown occupation | fell back to business_type string | empty list (no crash) |
+
+Note: discovery now returns *candidates*. The eligibility engine still filters out schemes the user doesn't qualify for (wrong gender, caste, etc.). The wider candidate set means fewer valid schemes are missed — not that irrelevant schemes are shown.
+
+---
+
+**`tests/test_discovery.py` — 40 discovery-layer tests added:**
+
+Coverage:
+- All business schemes have `normalized_categories`
+- All categories are from the controlled vocabulary
+- Individual schemes have no `normalized_categories`
+- `occupation_to_categories` uses only controlled vocabulary
+- Tailor → pm_vishwakarma, mudra_shishu, pmegp, cgtmse, mudra_kishor
+- Tailor does NOT return transport schemes or vendor-only schemes
+- Kirana → retail schemes (mudra_shishu, cgtmse, mudra_kishor)
+- Mechanic → service schemes (mudra_shishu, pmegp)
+- auto_driver / taxi_driver → transport schemes (pm_swarozgar_transport)
+- street_vendor → pm_svanidhi, mudra_shishu
+- salon → pm_vishwakarma, mudra_shishu
+- carpenter → pm_vishwakarma
+- Unknown occupation → returns list, no crash, returns empty list
+- Empty string input → no exception
+- Discovery does NOT claim eligibility (stand_up_india still appears as candidate for tailor even though it requires female/SC/ST — that's the engine's job)
+- Return type is list of dicts, not EligibilityResult objects
+- `skills/discover.py` does not import `check_scheme_eligibility` or `EligibilityStatus`
+- Parametrized: every occupation in `occupation_to_categories` returns at least one candidate
+
+**Test results:** 121/121 passed (61 engine + 20 conversation + 40 discovery), 1.11s
+
 <!-- Add new entries below as work progresses -->

@@ -140,4 +140,54 @@ The old state had three hardcoded `if scheme["id"] == ...` branches. The new sta
 
 The `question_words` check runs before all other routing, including the documents shortcut. Any word in that list that appears in a user message — even as a substring — routes to the LLM. The word "documents" contains "document" which is in the list. This means typing "documents" as a command always hits the LLM, not the shortcut. The fix in tests was to use "పత్రాలు" instead. The underlying issue (LLM trigger is checked too early and too broadly) should be addressed separately.
 
+### 2026-08-28 — Session 5: Telegram Smoke Test
+
+**L18 — Automated tests validate application logic, but not external service integration**
+
+81 unit and conversation-layer tests pass reliably. They test everything the engine and state machine do in isolation. They cannot test whether the Telegram API responds within the configured timeout, whether the network path to `api.telegram.org` is stable, or whether the bot's polling connection is healthy. A green test suite is a necessary condition for a working bot — not a sufficient one. Real integration testing against the live Telegram API is a separate step and must be done before any demo.
+
+---
+
+**L19 — A successful startup does not guarantee successful external API communication**
+
+The bot process started cleanly, all imports resolved, and the Telegram polling loop initialised without error. The first outbound API call still timed out. These are two independent things: process health and network/API health. In a demo context, both need to be verified separately. The sequence is: (1) run tests, (2) start bot, (3) send a real message and confirm a real reply.
+
+### 2026-08-28 — Session 6: Normalized Discovery Model
+
+**L20 — Literal keyword matching is a data problem that compounds over time**
+
+The old discovery model worked by substring-matching a user's occupation string against `target_business_types` values in `schemes.json`. For "tailor" this returned exactly one scheme — PM Vishwakarma — because only that scheme used the words "tailor" or "tailors" in its target types. Mudra Shishu targets "Service Providers, Micro-Units, Small Shops, Street Vendors" — all relevant to a tailor, but not textually connected to the word "tailor."
+
+Fixing this with keyword expansion would require maintaining an ever-growing, English-biased synonym table. The table would need to cover every scheme's phrasing, every user's phrasing, and every combination. This doesn't scale.
+
+*The right fix is a layer of abstraction:* assign schemes to normalized categories, assign occupations to normalized categories, and match on the categories — not the words.
+
+---
+
+**L21 — A controlled vocabulary makes the system auditable and constraints testable**
+
+Once there is a controlled vocabulary (10 categories: `service`, `retail`, `artisan`, `micro_enterprise`, `manufacturing`, `transport`, `agriculture`, `startup`, `women_led`, `vendor`), every assignment can be validated automatically. Tests check that:
+
+- Every business scheme has `normalized_categories`
+- Every category used is from the allowed set
+- Every occupation maps only to allowed categories
+
+Without a controlled vocabulary, the category field would grow arbitrarily and become another unmaintainable synonym table. The constraint is what makes the abstraction work.
+
+---
+
+**L22 — Discovery and eligibility are separate responsibilities with different failure modes**
+
+Discovery failure: a scheme that should appear as a candidate is missing from the list. The user never considers it. This is a silent miss — no error, just a missed opportunity.
+
+Eligibility failure: a scheme is shown as eligible when the user doesn't actually qualify. This is a wrong answer — potentially misleading.
+
+These have different acceptable error rates. Discovery can be inclusive (show more candidates; let the engine filter) without harm. Eligibility must be precise. Mixing the two responsibilities into one function means tuning one always risks breaking the other. The separation is the architecture.
+
+---
+
+**L23 — The legacy keyword fallback is the right default for the transition period**
+
+11 canonical occupations are now in `occupation_to_categories`. There are many more occupations users might describe. Rather than crashing or returning nothing for unrecognised occupations, the new `get_candidate_schemes` function falls back to the old keyword model. This preserves existing behavior for everything not yet mapped, and makes the upgrade path incremental. The next step is LLM-based occupation classification that normalises free-text occupation descriptions (e.g. "నేను టైలరింగ్ చేస్తున్నాను") to canonical keys ("tailor") — that step is deferred, but the architecture is ready for it.
+
 <!-- Add new entries below as work progresses -->
