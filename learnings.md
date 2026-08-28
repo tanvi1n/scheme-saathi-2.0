@@ -190,4 +190,28 @@ These have different acceptable error rates. Discovery can be inclusive (show mo
 
 11 canonical occupations are now in `occupation_to_categories`. There are many more occupations users might describe. Rather than crashing or returning nothing for unrecognised occupations, the new `get_candidate_schemes` function falls back to the old keyword model. This preserves existing behavior for everything not yet mapped, and makes the upgrade path incremental. The next step is LLM-based occupation classification that normalises free-text occupation descriptions (e.g. "నేను టైలరింగ్ చేస్తున్నాను") to canonical keys ("tailor") — that step is deferred, but the architecture is ready for it.
 
+### 2026-08-28 — Session 7: Occupation Normalization
+
+**L24 — The LLM's role in this system is classification, not reasoning**
+
+The LLM is given a closed vocabulary of 11 words and a user description. It is asked to return exactly one word. Temperature=0, max_tokens=10. It has no access to scheme data, no eligibility context, nothing to reason about. This is using the LLM as a multilingual text classifier — a task it is genuinely good at — rather than as a decision engine, where it would be unreliable.
+
+---
+
+**L25 — Validation against a closed vocabulary converts an unreliable signal into a reliable one**
+
+A raw LLM output is unreliable by nature — it might return "tailor shop", "Tailor", "टेलर", or a complete sentence. Validating the entire stripped-and-lowercased output against `CANONICAL_OCCUPATIONS` converts this into a binary: either we get exactly one of our 11 keys, or we get `None`. The caller always knows which case it is in. There is no ambiguous middle ground.
+
+---
+
+**L26 — A local keyword fallback is safer than importing from a sibling module**
+
+The design called for a deterministic fallback when the LLM is unavailable. The obvious implementation was to reuse `keyword_map` from `skills/discover.py`. That would have created a mutual import risk: if `discover.py` ever imports from `normalize.py` (e.g. to use `CANONICAL_OCCUPATIONS`), the circular dependency would break both modules at import time. Keeping a local `_FALLBACK_KEYWORDS` dict in `normalize.py` costs a small amount of duplication but eliminates the dependency edge entirely. The test suite confirms the modules are independent.
+
+---
+
+**L27 — An injectable groq_client parameter is the cleanest test seam for LLM calls**
+
+Rather than monkeypatching `requests.post` or mocking environment variables, the function accepts an optional `groq_client` argument that must implement `.complete(prompt) -> str`. Tests pass a `MockClient(response)` or an `ErrorClient()`. No patching, no `unittest.mock`, no test-specific branches in production code. The test reads exactly what the function does.
+
 <!-- Add new entries below as work progresses -->

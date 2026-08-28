@@ -328,4 +328,98 @@ Coverage:
 
 **Test results:** 121/121 passed (61 engine + 20 conversation + 40 discovery), 1.11s
 
+### 2026-08-28 — Session 7: Occupation Normalization Layer
+
+**Why introduced:**
+
+The normalized category discovery model (Session 6) required the user's occupation to already be a canonical key like `"tailor"` before `get_candidate_schemes()` could use it. Users don't type canonical keys — they type "నేను టైలరింగ్ చేస్తున్నాను" or "darzi ka kaam karta hoon". This session adds the LLM step that bridges raw natural-language input to the closed canonical vocabulary.
+
+**What was built:**
+
+`skills/normalize.py` — new module, classification only:
+
+- `CANONICAL_OCCUPATIONS: frozenset` — single source of truth for the 11 canonical keys
+- `OCCUPATION_DISPLAY_LIST: str` — human-readable list shown to users when normalization fails
+- `OccupationResult` dataclass — `canonical`, `raw_llm_output`, `source`
+- `_FALLBACK_KEYWORDS: dict` — local Telugu/Hindi/English keyword map (not imported from `discover.py` — avoids circular dependency)
+- `_fallback_normalize(raw_text)` — deterministic keyword scan, used when LLM is unavailable
+- `_call_groq(raw_text, groq_client)` — internal Groq call; accepts injected mock for testing
+- `normalize_occupation(raw_text, groq_client=None)` — public API
+
+**LLM call parameters:**
+- Model: `llama-3.1-8b-instant` (same as rest of project)
+- Temperature: 0
+- Max tokens: 10
+- System prompt: closed classification task — only the 11 canonical keys, nothing about schemes
+
+**The LLM prompt contains:**
+- The user's raw business description
+- The closed vocabulary list
+
+**The LLM prompt does NOT contain:**
+- scheme names
+- eligibility criteria
+- scheme amounts
+- schemes.json
+
+**Validation:** LLM output is stripped and lowercased. If the result is not exactly one of the 11 canonical keys, `canonical=None` is returned. Extra text (e.g. "tailor shop owner") is rejected — only an exact single-word match is accepted.
+
+**Fallback:** Any exception from the LLM call triggers `_fallback_normalize()` — a deterministic keyword scan of the raw text covering Telugu, Hindi, and English synonyms. `source="fallback"` distinguishes this from a clean LLM result.
+
+**`agent.py` changes:**
+- Import added: `from skills.normalize import normalize_occupation, OCCUPATION_DISPLAY_LIST`
+- `awaiting_business_type` state: bmap keys fixed (`vegetable vendor` → `vegetable_vendor`, `auto` → `auto_driver`). Numbered shortcuts now flow through `normalize_occupation()` before storing.
+- `awaiting_custom_business_type` state: free-text input now flows through `normalize_occupation()`. On success, stores canonical key and continues. On failure (canonical=None), shows the user a clarification message with the supported occupation list — does not silently store an unrecognised value.
+
+**Full pipeline after this milestone:**
+
+```
+raw user text ("నేను టైలరింగ్ చేస్తున్నాను")
+    ↓
+normalize_occupation()          ← skills/normalize.py  [LLM, temperature=0]
+    ↓
+"tailor"                        ← canonical key from CANONICAL_OCCUPATIONS
+    ↓
+get_candidate_schemes()         ← skills/discover.py   [deterministic]
+    ↓
+candidate scheme dicts
+    ↓
+check_scheme_eligibility()      ← eligibility_engine.py [deterministic]
+    ↓
+LIKELY_ELIGIBLE / NEEDS_VERIFICATION / LIKELY_NOT_ELIGIBLE
+```
+
+The LLM touches exactly one step. Everything downstream is deterministic.
+
+**`tests/test_normalize.py` — 38 tests:**
+
+Coverage:
+- Exact canonical English input → correct key
+- Hinglish input → correct key (LLM classifies)
+- Telugu input → correct key (LLM classifies)
+- Parametrized: all 11 canonical occupations accepted as valid LLM output
+- Invalid out-of-vocabulary LLM output → canonical=None
+- LLM returns "unknown" → canonical=None
+- LLM exception → fallback activates, source="fallback"
+- LLM exception on unknown input → canonical=None, source="fallback"
+- Blank input → canonical=None, source="error"
+- Whitespace-only input → source="error"
+- Uppercase LLM output normalised (TAILOR → tailor)
+- Mixed-case normalised (Auto_Driver → auto_driver)
+- Leading/trailing whitespace stripped
+- Extra text in LLM output rejected ("tailor shop owner" → None)
+- Sentence in LLM output rejected
+- Fallback: Telugu auto keyword → auto_driver
+- Fallback: Hindi dairy keyword → dairy_business
+- Fallback: kirana keyword → kirana
+- OccupationResult instance and field shape
+- CANONICAL_OCCUPATIONS is frozenset, has 11 entries, contains exactly the expected keys
+- OCCUPATION_DISPLAY_LIST is a string containing all 11 keys
+- No raise on very long input
+- No raise on special characters / emoji
+
+**Test results:** 38/38 normalize, 159/159 full suite (38 normalize + 40 discovery + 20 conversation + 61 engine), 2.40s
+
+**Circular dependency avoided:** `skills/normalize.py` does not import from `skills/discover.py`. The fallback keyword map is kept local to `normalize.py`. `skills/discover.py` does not import from `skills/normalize.py`. No circular dependency in either direction.
+
 <!-- Add new entries below as work progresses -->

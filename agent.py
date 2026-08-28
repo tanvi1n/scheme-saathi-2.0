@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 from skills.discover import discover_schemes, keyword_map
 from skills.documents import get_document_guide
+from skills.normalize import normalize_occupation, OCCUPATION_DISPLAY_LIST
 from typing import Dict, Any
 
 from eligibility_engine import (
@@ -447,12 +448,20 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
     # ── AWAITING_BUSINESS_TYPE ────────────────────────────────────────
     elif state == "awaiting_business_type":
         bmap = {"1": "kirana", "2": "tailor", "3": "salon",
-                "4": "vegetable vendor", "5": "auto", "6": "other"}
+                "4": "vegetable_vendor", "5": "auto_driver", "6": "other"}
         ui = message.strip()
         if ui == "6" or ui.lower() == "other":
             session["state"] = "awaiting_custom_business_type"
             return "మీ వ్యాపార రకం టైప్ చేయండి:"
-        data["business_type"] = bmap.get(ui, ui)
+        # Map numbered shortcut to a raw label, then normalize
+        raw_occupation = bmap.get(ui, ui)
+        norm = normalize_occupation(raw_occupation)
+        if norm.canonical:
+            data["business_type"] = norm.canonical
+        else:
+            # Numbered shortcut produced something unrecognised — store as-is
+            # (legacy keyword fallback in _filter_business_schemes handles it)
+            data["business_type"] = raw_occupation
         session["state"] = "eligibility"
         data["eligibility_step"] = 0
         data["user_profile"] = {}
@@ -460,11 +469,19 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
 
     # ── AWAITING_CUSTOM_BUSINESS_TYPE ────────────────────────────────
     elif state == "awaiting_custom_business_type":
-        data["business_type"] = message.strip()
-        session["state"] = "eligibility"
-        data["eligibility_step"] = 0
-        data["user_profile"] = {}
-        return "మీ వ్యక్తిగత వివరాలు అడుగుతూ ఉన్నాను...\n\nమీ లింగం చెప్పండి:"
+        norm = normalize_occupation(message.strip())
+        if norm.canonical:
+            data["business_type"] = norm.canonical
+            session["state"] = "eligibility"
+            data["eligibility_step"] = 0
+            data["user_profile"] = {}
+            return "మీ వ్యక్తిగత వివరాలు అడుగుతూ ఉన్నాను...\n\nమీ లింగం చెప్పండి:"
+        # Normalization failed — ask the user to clarify
+        return (
+            "మీ వ్యాపార రకం అర్థం కాలేదు. దయచేసి క్రింది జాబితా నుండి ఒకటి చెప్పండి:\n\n"
+            f"{OCCUPATION_DISPLAY_LIST}\n\n"
+            "ఉదాహరణ: tailor లేదా టైలర్"
+        )
 
     # ── ELIGIBILITY (business profile collection) ─────────────────────
     elif state == "eligibility":
