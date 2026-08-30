@@ -326,11 +326,9 @@ def _build_scheme_list_message(eligible: list, needs_verif: list) -> str:
     NEEDS_VERIFICATION schemes are listed with a ❓ marker and a note.
     """
     all_shown = eligible + needs_verif
-    total_amount = sum(s.get("amount_max", 0) for s in eligible)
+
 
     lines = [f"మీకు {len(all_shown)} పథకాలు కనుగొనబడ్డాయి"]
-    if total_amount:
-        lines[0] += f" (నిర్ధారించబడిన మొత్తం ₹{total_amount:,})"
     lines.append("")
 
     idx = 1

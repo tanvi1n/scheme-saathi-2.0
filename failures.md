@@ -122,4 +122,50 @@ Not established. The timeout was transient. Possible contributing factors includ
 **What we learned:**
 See L19 — startup health and external API health are independent. A single transient timeout on first contact is not sufficient reason to diagnose a code problem. The correct response is: verify connectivity, retry, and only investigate further if the failure is reproducible.
 
+### F7 — Scheme list displayed a misleading "confirmed total" amount (2026-08-30)
+
+**What happened:**
+
+During manual Telegram testing, the scheme list response included a header line like:
+
+> మీకు 4 పథకాలు కనుగొనబడ్డాయి (నిర్ధారించబడిన మొత్తం ₹80,20,000)
+
+"నిర్ధారించబడిన మొత్తం" translates to "confirmed total". The value was a sum of `amount_max` across all LIKELY_ELIGIBLE schemes shown in that list.
+
+**Why it is a problem:**
+
+Three compounding issues:
+
+1. `amount_max` is the ceiling of each scheme's funding range, not the typical or minimum benefit.
+2. The schemes are independent products (separate loans or grants). A user cannot receive the maximum from each simultaneously. The amounts are not additive entitlements.
+3. The label "నిర్ధారించబడిన మొత్తం" (confirmed total) implies the money is approved. The eligibility engine returns LIKELY_ELIGIBLE — a probability signal, not an approval.
+
+For a user making real financial decisions, a displayed total of several lakh or crore rupees labeled "confirmed" could cause them to overestimate their financial position before any application has been submitted or approved.
+
+**Where it was traced:**
+
+`agent.py`, function `_build_scheme_list_message()`:
+
+```python
+total_amount = sum(s.get("amount_max", 0) for s in eligible)
+if total_amount:
+    lines[0] += f" (నిర్ధారించబడిన మొత్తం ₹{total_amount:,})"
+```
+
+**When it was introduced:**
+
+Commit `8a8e106` (Session 4 — eligibility engine migration, 2026-08-27). The discovery and normalization changes in Sessions 6 and 7 did not introduce it, but did expand the candidate set, making the summed total larger.
+
+**What we did:**
+
+Removed the aggregate total and its label entirely from `_build_scheme_list_message()`. Individual scheme amounts remain displayed on each line (e.g. `✅ పీఎం విశ్వకర్మ — ₹3,00,000`). Per-scheme amounts are accurate in context; a cross-scheme sum is not.
+
+Relabeling was considered ("గరిష్ట సాధ్యం" / "maximum possible") but rejected. The aggregate number itself is misleading regardless of label — there is no framing that makes a sum of independent scheme ceilings meaningful to a user who has not yet applied to any of them.
+
+**Test result:** Full automated test suite: 159/159 passed, 0 failed, 0 errors. Manual Telegram smoke test confirmed the aggregate "నిర్ధారించబడిన మొత్తం" no longer appears in the scheme list.
+
+**What we learned:**
+
+See L28 in learnings.md.
+
 <!-- New failures go here as they are discovered -->

@@ -422,4 +422,26 @@ Coverage:
 
 **Circular dependency avoided:** `skills/normalize.py` does not import from `skills/discover.py`. The fallback keyword map is kept local to `normalize.py`. `skills/discover.py` does not import from `skills/normalize.py`. No circular dependency in either direction.
 
+### 2026-08-30 — Session 8: Remove misleading aggregate scheme total
+
+**What was found:**
+
+Manual Telegram testing revealed that the scheme list header showed "నిర్ధారించబడిన మొత్తం" ("confirmed total") — a sum of `amount_max` across all LIKELY_ELIGIBLE schemes. The label and the value together could mislead a user into believing they have been approved for a combined amount that they haven't applied for and cannot simultaneously receive.
+
+Full trace is in failures.md — F7.
+
+**What was changed:**
+
+`agent.py`, `_build_scheme_list_message()`:
+
+- Removed the `total_amount` calculation
+- Removed the `"నిర్ధారించబడిన మొత్తం"` label from the header line
+- Individual per-scheme amounts (`✅ పీఎం విశ్వకర్మ — ₹3,00,000`) remain unchanged
+
+The scheme count in the header remains: `మీకు {n} పథకాలు కనుగొనబడ్డాయి`.
+
+**Why removal rather than relabeling:**
+
+The number itself is the problem, not just the label. A sum of independent scheme ceilings (e.g. CGTMSE alone is ₹5 crore) has no actionable meaning for a user before any application. Relabeling it "maximum possible" would still imply it is a figure worth quoting. Removing it entirely eliminates the misleading signal without removing any useful information — each scheme's amount remains visible on its own line.
+
 <!-- Add new entries below as work progresses -->

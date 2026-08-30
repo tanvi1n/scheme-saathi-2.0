@@ -214,4 +214,16 @@ The design called for a deterministic fallback when the LLM is unavailable. The 
 
 Rather than monkeypatching `requests.post` or mocking environment variables, the function accepts an optional `groq_client` argument that must implement `.complete(prompt) -> str`. Tests pass a `MockClient(response)` or an `ErrorClient()`. No patching, no `unittest.mock`, no test-specific branches in production code. The test reads exactly what the function does.
 
+### 2026-08-30 — Session 8: Product quality — financial information framing
+
+**L28 — "Likely eligible" is not "approved". UI must not imply otherwise.**
+
+The eligibility engine returns `LIKELY_ELIGIBLE` — a signal that, based on the profile data collected, the user appears to meet the scheme's documented criteria. It is not an approval, a guarantee, or a disbursement. The scheme has not been applied to. A government authority has not reviewed the application.
+
+Displaying a combined rupee total labeled "confirmed" converts a probabilistic classification result into something that looks like a financial commitment. For users who are already in financial difficulty (the target demographic), this framing is harmful — it could influence borrowing decisions, raise expectations that government offices then fail to meet, or undermine trust in the tool when reality doesn't match.
+
+The principle: financial amounts should only appear in context that makes their meaning precise. Per-scheme amounts on individual lines are precise — the user can read "₹3,00,000" next to PM Vishwakarma and understand it as that scheme's benefit ceiling. A cross-scheme aggregate with no application in progress has no precise meaning and should not be displayed.
+
+This applies beyond this specific bug: any time the UI attaches a monetary figure to a LIKELY_ELIGIBLE result, the framing must make clear it is a scheme benefit range — not an amount the user will receive.
+
 <!-- Add new entries below as work progresses -->
