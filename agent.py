@@ -59,6 +59,39 @@ _MISSING_FIELD_QUESTIONS = {
     "white_ration_card": "మీకు వైట్ రేషన్ కార్డ్ ఉందా? (1-అవును / 2-లేదు)",
 }
 
+# Short Telugu requirement phrases for the scheme list ❓ line.
+# Maps internal field name → what the user needs to satisfy/verify.
+# Used by _missing_field_requirement_label().
+_MISSING_FIELD_REQUIREMENT = {
+    "land_ownership":    "వ్యవసాయ భూమి కలిగి ఉండాలి",
+    "annual_income":     "వార్షిక ఆదాయ పరిమితి వర్తిస్తుంది",
+    "monthly_units":     "నెలవారీ విద్యుత్ వినియోగ పరిమితి వర్తిస్తుంది",
+    "annual_turnover":   "వార్షిక టర్నోవర్ పరిమితి వర్తిస్తుంది",
+    "white_ration_card": "వైట్ రేషన్ కార్డ్ కలిగి ఉండాలి",
+    "gender":            "లింగ అర్హత వర్తిస్తుంది",
+    "caste":             "కుల అర్హత వర్తిస్తుంది",
+    "age":               "వయస్సు అర్హత వర్తిస్తుంది",
+    "gst":               "GST నమోదు అవసరం",
+    "bank_account":      "బ్యాంక్ ఖాతా అవసరం",
+}
+
+
+def _missing_field_requirement_label(missing_fields: list) -> str:
+    """
+    Return a short Telugu requirement phrase for the first recognisable
+    missing field in the list.
+
+    Used to show specific requirement text next to ❓ schemes in the list,
+    e.g. "అదనపు అవసరం: వ్యవసాయ భూమి కలిగి ఉండాలి"
+
+    Falls back to generic wording if no field is in the map.
+    """
+    for field in missing_fields:
+        label = _MISSING_FIELD_REQUIREMENT.get(field)
+        if label:
+            return f"అదనపు అవసరం: {label}"
+    return "అదనపు సమాచారం అవసరం"
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers
@@ -123,7 +156,7 @@ def _format_eligibility_result(scheme: dict, result) -> str:
     msg  = f"✅ {scheme['telugu_name']}\n\n"
     msg += f"📝 వివరణ: {scheme.get('telugu_description', scheme.get('description', ''))}\n\n"
     msg += f"💰 లాభం: ₹{scheme.get('amount_min', 0):,} - ₹{scheme.get('amount_max', 0):,}\n\n"
-    msg += "మీరు ఈ పథకానికి అర్హులు! ✅\n\n"
+    msg += "మీరు ఈ పథకానికి అర్హత కలిగి ఉంటారు ✅\n\n"
     msg += "📋 డాక్యుమెంట్ల కోసం, 'documents' టైప్ చేయండి.\n"
     msg += "🔄 మరొక పథకం కోసం, 'restart' టైప్ చేయండి."
     return msg
@@ -258,6 +291,7 @@ def _filter_business_schemes(business_type: str, profile: UserProfile, all_schem
 
     eligible = []
     needs_verif = []
+    needs_verif_labels: dict = {}  # scheme_id → requirement label string
 
     # ── Strategy 1: normalized category match ─────────────────────────
     categories = occupation_to_categories.get(business_type_lower)
@@ -273,7 +307,10 @@ def _filter_business_schemes(business_type: str, profile: UserProfile, all_schem
                     eligible.append(scheme)
                 elif result.status == EligibilityStatus.NEEDS_VERIFICATION:
                     needs_verif.append(scheme)
-        return eligible, needs_verif
+                    needs_verif_labels[scheme["id"]] = _missing_field_requirement_label(
+                        result.missing_fields
+                    )
+        return eligible, needs_verif, needs_verif_labels
 
     # ── Strategy 2: legacy keyword fallback ───────────────────────────
     variants = keyword_map.get(business_type_lower, [business_type_lower])
@@ -293,19 +330,24 @@ def _filter_business_schemes(business_type: str, profile: UserProfile, all_schem
             eligible.append(scheme)
         elif result.status == EligibilityStatus.NEEDS_VERIFICATION:
             needs_verif.append(scheme)
+            needs_verif_labels[scheme["id"]] = _missing_field_requirement_label(
+                result.missing_fields
+            )
 
-    return eligible, needs_verif
+    return eligible, needs_verif, needs_verif_labels
 
 
 def _filter_individual_schemes(profile: UserProfile, all_schemes: list) -> tuple:
     """
     Filter individual schemes by eligibility engine.
 
-    Returns (eligible_list, needs_verif_list).
+    Returns (eligible_list, needs_verif_list, needs_verif_labels) where
+    needs_verif_labels maps scheme_id → requirement label string.
     LIKELY_NOT_ELIGIBLE schemes are discarded.
     """
     eligible = []
     needs_verif = []
+    needs_verif_labels: dict = {}
 
     for scheme in all_schemes:
         if "target_individual_types" not in scheme:
@@ -315,18 +357,28 @@ def _filter_individual_schemes(profile: UserProfile, all_schemes: list) -> tuple
             eligible.append(scheme)
         elif result.status == EligibilityStatus.NEEDS_VERIFICATION:
             needs_verif.append(scheme)
+            needs_verif_labels[scheme["id"]] = _missing_field_requirement_label(
+                result.missing_fields
+            )
 
-    return eligible, needs_verif
+    return eligible, needs_verif, needs_verif_labels
 
 
-def _build_scheme_list_message(eligible: list, needs_verif: list) -> str:
+def _build_scheme_list_message(
+    eligible: list,
+    needs_verif: list,
+    needs_verif_labels: dict = None,
+) -> str:
     """
     Format the scheme list message.
-    LIKELY_ELIGIBLE schemes are listed normally.
-    NEEDS_VERIFICATION schemes are listed with a ❓ marker and a note.
+    LIKELY_ELIGIBLE schemes are listed with ✅ and their amount.
+    NEEDS_VERIFICATION schemes are listed with ❓ and the specific
+    requirement still needed, e.g. "అదనపు అవసరం: వ్యవసాయ భూమి కలిగి ఉండాలి".
     """
-    all_shown = eligible + needs_verif
+    if needs_verif_labels is None:
+        needs_verif_labels = {}
 
+    all_shown = eligible + needs_verif
 
     lines = [f"మీకు {len(all_shown)} పథకాలు కనుగొనబడ్డాయి"]
     lines.append("")
@@ -336,7 +388,9 @@ def _build_scheme_list_message(eligible: list, needs_verif: list) -> str:
         lines.append(f"{idx}. ✅ {scheme['telugu_name']} — ₹{scheme.get('amount_max', 0):,}")
         idx += 1
     for scheme in needs_verif:
-        lines.append(f"{idx}. ❓ {scheme['telugu_name']} — మరింత సమాచారం అవసరం")
+        req_label = needs_verif_labels.get(scheme["id"], "అదనపు సమాచారం అవసరం")
+        lines.append(f"{idx}. ❓ {scheme['telugu_name']}")
+        lines.append(f"   {req_label}")
         idx += 1
 
     lines.append("\nఏది మరింత తెలుసుకోవాలి? (సంఖ్య టైప్ చేయండి)")
@@ -543,7 +597,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
 
             profile = _build_user_profile(data["user_profile"])
             all_schemes = _load_schemes()
-            eligible, needs_verif = _filter_business_schemes(
+            eligible, needs_verif, needs_verif_labels = _filter_business_schemes(
                 data["business_type"], profile, all_schemes
             )
 
@@ -554,7 +608,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
             data["matched_schemes"] = eligible + needs_verif
             data["needs_verif_ids"] = {s["id"] for s in needs_verif}
             session["state"] = "discovered"
-            return _build_scheme_list_message(eligible, needs_verif)
+            return _build_scheme_list_message(eligible, needs_verif, needs_verif_labels)
 
     # ── DISCOVERED (business) ─────────────────────────────────────────
     elif state == "discovered":
@@ -654,7 +708,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
 
             profile = _build_user_profile(data["user_profile"])
             all_schemes = _load_schemes()
-            eligible, needs_verif = _filter_individual_schemes(profile, all_schemes)
+            eligible, needs_verif, needs_verif_labels = _filter_individual_schemes(profile, all_schemes)
 
             if not eligible and not needs_verif:
                 session["state"] = "awaiting_scheme_category"
@@ -663,7 +717,7 @@ def handle_message(user_id: str, message: str, sessions: Dict[str, Dict[str, Any
             data["matched_schemes"] = eligible + needs_verif
             data["needs_verif_ids"] = {s["id"] for s in needs_verif}
             session["state"] = "individual_discovered"
-            return _build_scheme_list_message(eligible, needs_verif)
+            return _build_scheme_list_message(eligible, needs_verif, needs_verif_labels)
 
     # ── INDIVIDUAL_DISCOVERED ─────────────────────────────────────────
     elif state == "individual_discovered":

@@ -226,4 +226,20 @@ The principle: financial amounts should only appear in context that makes their 
 
 This applies beyond this specific bug: any time the UI attaches a monetary figure to a LIKELY_ELIGIBLE result, the framing must make clear it is a scheme benefit range — not an amount the user will receive.
 
+### 2026-08-30 — Session 9: Scheme-result UX
+
+**L29 — The engine already produces the right data; the presentation layer was discarding it**
+
+`EligibilityResult.missing_fields` lists exactly which profile fields are still unknown. `EligibilityResult.unknown[].field` has the same information with attached reason strings. All the data needed to show "అదనపు అవసరం: వ్యవసాయ భూమి కలిగి ఉండాలి" was already computed by the engine on every run. The old `_build_scheme_list_message` simply ignored it and showed generic text. The fix was to thread `result.missing_fields` from the filter function out to the display function — a three-line change to each filter, a new helper dict, and an updated list formatter.
+
+The lesson: before adding new engine logic, check what the engine already returns. Structured results are only valuable if the presentation layer uses them.
+
+---
+
+**L30 — "Likely eligible" and "eligible" are meaningfully different for users making financial decisions**
+
+The old wording "మీరు ఈ పథకానికి అర్హులు!" (You are eligible!) uses the present-tense declarative. The user has not applied. The scheme has not approved them. What the system established is that, based on the profile data collected, the documented eligibility rules appear to be met.
+
+"అర్హత కలిగి ఉంటారు" (You appear to be eligible / you are likely to be eligible) is still positive and actionable — it tells the user to proceed — without asserting an outcome that hasn't happened. The distinction matters for the demographic: small business owners who have limited experience with government processes may interpret "eligible!" as a guarantee, affecting how they plan for the application.
+
 <!-- Add new entries below as work progresses -->

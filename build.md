@@ -444,4 +444,64 @@ The scheme count in the header remains: `మీకు {n} పథకాలు క
 
 The number itself is the problem, not just the label. A sum of independent scheme ceilings (e.g. CGTMSE alone is ₹5 crore) has no actionable meaning for a user before any application. Relabeling it "maximum possible" would still imply it is a figure worth quoting. Removing it entirely eliminates the misleading signal without removing any useful information — each scheme's amount remains visible on its own line.
 
+### 2026-08-30 — Session 9: Simplified scheme-result UX
+
+**What changed:**
+
+Traced by inspecting the eligibility flow — `LIKELY_NOT_ELIGIBLE` schemes were already silently discarded; `NEEDS_VERIFICATION` schemes appeared with generic "మరింత సమాచారం అవసరం" text; and the final `LIKELY_ELIGIBLE` result said "మీరు ఈ పథకానికి అర్హులు!" — an exclamation mark implying confirmed approval.
+
+Three targeted fixes to `agent.py`, all in the presentation layer. `eligibility_engine.py` untouched.
+
+**Change 1 — `_MISSING_FIELD_REQUIREMENT` dict + `_missing_field_requirement_label()` helper:**
+
+Maps internal field names to short Telugu requirement phrases:
+
+```
+land_ownership    → "వ్యవసాయ భూమి కలిగి ఉండాలి"
+annual_income     → "వార్షిక ఆదాయ పరిమితి వర్తిస్తుంది"
+monthly_units     → "నెలవారీ విద్యుత్ వినియోగ పరిమితి వర్తిస్తుంది"
+annual_turnover   → "వార్షిక టర్నోవర్ పరిమితి వర్తిస్తుంది"
+white_ration_card → "వైట్ రేషన్ కార్డ్ కలిగి ఉండాలి"
+...
+```
+
+Returns `"అదనపు అవసరం: <label>"` for the first recognised field. Falls back to `"అదనపు సమాచారం అవసరం"` for unrecognised fields.
+
+**Change 2 — `_filter_business_schemes()` and `_filter_individual_schemes()` return a third value:**
+
+Both functions now return `(eligible, needs_verif, needs_verif_labels)` where `needs_verif_labels` is a `dict[scheme_id → requirement_label]` built at filter time from the engine's `result.missing_fields`. Both call sites updated to unpack three values.
+
+**Change 3 — `_build_scheme_list_message()` shows specific requirement per ❓ scheme:**
+
+Before:
+```
+3. ❓ రైతు భరోసా — మరింత సమాచారం అవసరం
+```
+
+After:
+```
+3. ❓ రైతు భరోసా
+   అదనపు అవసరం: వ్యవసాయ భూమి కలిగి ఉండాలి
+```
+
+Function signature extended to accept optional `needs_verif_labels: dict = None`. Backward compatible — callers that don't pass labels get the fallback text.
+
+**Change 4 — `_format_eligibility_result()` softened LIKELY_ELIGIBLE wording:**
+
+Before: `"మీరు ఈ పథకానికి అర్హులు! ✅"` — implies confirmed approval
+After:  `"మీరు ఈ పథకానికి అర్హత కలిగి ఉంటారు ✅"` — states likely eligibility
+
+The follow-up behavior (NEEDS_VERIFICATION → collect missing field → re-run engine) is completely unchanged.
+
+**Tests added — `tests/test_agent_conversation.py` (+19 tests, 35 total):**
+
+- `_missing_field_requirement_label`: land, income, ration card, unknown field fallback, empty list fallback, first-recognised ordering
+- `_build_scheme_list_message`: specific label shown, checkmark + amount for ✅, generic text absent when label provided, fallback when no labels dict, multi-scheme mixed list
+- `_format_eligibility_result`: softened wording present, old wording absent, LIKELY_NOT_ELIGIBLE still shows reason
+- End-to-end individual flow: specific requirement labels replace generic text in the live list
+
+**Test result:** 35/35 targeted tests passed.
+
+One test bug found during the run: asserted `"3,00,000"` (Indian-style) but Python's `:,` format produces `"300,000"` (US-style). Fixed immediately — test corrected to `"300,000"`. No production code bugs.
+
 <!-- Add new entries below as work progresses -->
